@@ -1,0 +1,11 @@
+# ISO files
+*.iso
+
+# Packer
+packer/packer_cache/
+packer/output-*/
+
+# Vagrant
+.vagrant/
+
+build/
