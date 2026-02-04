@@ -29,7 +29,7 @@ variable "iso_path" {
 
 variable "vm_name" {
   type        = string
-  default     = "tutorial"
+  default     = "ai-playground-base"
   description = "Name of the VM"
 }
 
@@ -99,6 +99,11 @@ source "virtualbox-iso" "debian13" {
 # Build configuration
 build {
   sources = ["source.virtualbox-iso.debian13"]
+
+  # Provisioner: Install dependencies before boxing
+  provisioner "shell" {
+    script = "${path.root}/dependencies.sh"
+  }
 
   # Post-processor: Convert to Vagrant box
   post-processor "vagrant" {
