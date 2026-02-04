@@ -29,3 +29,4 @@ while IFS= read -r vm; do
 done <<< "$vms"
 
 echo "All VMs removed."
+
