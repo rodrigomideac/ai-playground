@@ -7,3 +7,5 @@ base-iso/packer contains a Packer template that will generate a simple vagrant b
 
 scripts/ must contain repository scripts.
 
+The build targets only Debian 13.3.0 amd64. Updating to a different Debian point release requires changing the ISO URL, filename, and checksums in scripts/download-iso.sh and base-iso/packer/template.pkr.hcl.
+

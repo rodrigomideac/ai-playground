@@ -2,6 +2,8 @@
 
 Builds a Vagrant box from a Debian 13 ISO file to be used as sandbox for coding agents.
 
+Contains Claude Code, Docker, Neovim, Curl and Git by default.
+
 # Getting Started
 
 - Make sure you have VirtualBox, Packer, and Vagrant. 
@@ -76,8 +78,8 @@ See [developer.hashicorp.com/vagrant/install](https://developer.hashicorp.com/va
 </details>
 
 - Clone this repo
-- Run `make download-iso` to download the netinst Debian 13 ISO.
-- Run `make build-from-base` to build the Vagrant box.
+- Run `make build-from-base` to build the Vagrant box. It will download a debian 13 netinst ISO, run Packer to install dependencies and build the vagrant box.
+- All contents on ./chroot/ are copied to inside the vagrant Box, when someone runs `vagrant up`. You can customize its contents.
 
 # Why
 Using coding agents without supervision provides huge productivity, but it is also a huge security risk.

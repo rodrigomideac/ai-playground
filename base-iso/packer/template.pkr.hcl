@@ -42,7 +42,7 @@ locals {
 
 # Source: VirtualBox ISO builder
 source "virtualbox-iso" "debian13" {
-  headless             = false
+  headless             = true
   # VM settings
   vm_name              = var.vm_name
   guest_os_type        = "Debian_64"
@@ -71,7 +71,7 @@ source "virtualbox-iso" "debian13" {
   # HTTP server for preseed file
   http_directory = "${path.root}"
   http_port_min  = 8100
-  http_port_max  = 8100
+  http_port_max  = 8200
 
   # SSH settings - wait for installation to complete
   ssh_username           = "rodrigo"
