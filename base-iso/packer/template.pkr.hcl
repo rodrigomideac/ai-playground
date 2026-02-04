@@ -105,6 +105,25 @@ build {
     script = "${path.root}/dependencies.sh"
   }
 
+  # Provisioner: Apply chroot overlay
+  provisioner "file" {
+    source      = "${path.root}/../../chroot"
+    destination = "/tmp"
+  }
+
+  provisioner "file" {
+    source      = "${path.root}/../../scripts/provision-chroot.sh"
+    destination = "/tmp/provision-chroot.sh"
+  }
+
+  provisioner "shell" {
+    inline = [
+      "chmod +x /tmp/provision-chroot.sh",
+      "/tmp/provision-chroot.sh /tmp/chroot",
+      "rm -rf /tmp/chroot /tmp/provision-chroot.sh"
+    ]
+  }
+
   # Post-processor: Convert to Vagrant box
   post-processor "vagrant" {
     output              = "${local.output_dir}/debian13.box"

@@ -31,25 +31,18 @@ Vagrant.configure("2") do |config|
     vb.customize ["modifyvm", :id, "--accelerate3d", "on"]
   end
 
-  # Provision: Display connection info after boot
-  # config.vm.provision "shell", inline: <<-SHELL
-  #   echo ""
-  #   echo "===================================="
-  #   echo "Launcher Test VM is ready!"
-  #   echo "===================================="
-  #   echo ""
-  #   echo "Connection Info:"
-  #   echo "  SSH:   ssh rodrigo@localhost -p 2222 (password: rodrigo)"
-  #   echo "===================================="
-  # SHELL
-  #
-  # # Run only on first provision
-  # config.vm.provision "shell", run: "once", inline: <<-SHELL
-  #   # Ensure photos directory exists
-  #   mkdir -p /home/launcher/photos
-  #   chown launcher:launcher /home/launcher/photos
-  #
-  #   # Ensure X can start on next boot
-  #   systemctl enable getty@tty1
-  # SHELL
+  # Provision: Apply chroot overlay
+  config.vm.provision "file",
+    source: "chroot/",
+    destination: "/tmp/chroot"
+
+  config.vm.provision "file",
+    source: "scripts/provision-chroot.sh",
+    destination: "/tmp/provision-chroot.sh"
+
+  config.vm.provision "shell", inline: <<-SHELL
+    chmod +x /tmp/provision-chroot.sh
+    /tmp/provision-chroot.sh /tmp/chroot
+    rm -rf /tmp/chroot /tmp/provision-chroot.sh
+  SHELL
 end
