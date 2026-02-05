@@ -76,7 +76,7 @@ source "virtualbox-iso" "debian13" {
   # SSH settings - wait for installation to complete
   ssh_username           = "rodrigo"
   ssh_password           = "rodrigo"
-  ssh_timeout            = "30m"
+  ssh_timeout            = "6h"
   ssh_handshake_attempts = 100
 
   # Shutdown settings

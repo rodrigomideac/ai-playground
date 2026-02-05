@@ -10,6 +10,7 @@ jobs:
       matrix:
         os: [ubuntu, fedora, arch]
     runs-on: [self-hosted, "${{ matrix.os }}"]
+    timeout-minutes: 360
     steps:
       - uses: actions/checkout@v4
       - run: make build-from-base
