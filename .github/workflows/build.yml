@@ -16,3 +16,4 @@ jobs:
       - run: make build-from-base
         env:
           PACKER_BOOT_WAIT: "1m"
+          PACKER_BOOT_KEYGROUP_INTERVAL: "5s"

@@ -27,6 +27,12 @@ variable "boot_wait" {
   description = "Time to wait before sending boot command (overridable via PACKER_BOOT_WAIT env var)"
 }
 
+variable "boot_keygroup_interval" {
+  type        = string
+  default     = "${env("PACKER_BOOT_KEYGROUP_INTERVAL")}"
+  description = "Delay between groups of keystrokes in boot command (overridable via PACKER_BOOT_KEYGROUP_INTERVAL env var)"
+}
+
 variable "iso_path" {
   type        = string
   default     = "../debian-13.3.0-amd64-netinst.iso"
@@ -43,8 +49,9 @@ variable "vm_name" {
 locals {
   output_dir  = var.artifact_dir
   iso_file    = var.iso_path
-  boot_wait_t = var.boot_wait != "" ? var.boot_wait : "10s"
-  timestamp   = formatdate("YYYYMMDD-hhmm", timestamp())
+  boot_wait_t             = var.boot_wait != "" ? var.boot_wait : "10s"
+  boot_keygroup_interval_t = var.boot_keygroup_interval != "" ? var.boot_keygroup_interval : "500ms"
+  timestamp                = formatdate("YYYYMMDD-hhmm", timestamp())
 }
 
 # Source: VirtualBox ISO builder
@@ -66,12 +73,16 @@ source "virtualbox-iso" "debian13" {
   # Boot settings - trigger preseed installation with GRUB EFI
   # Menu: Live system (default) -> Live fail-safe -> Start Installer <- we want this
   # Editor: setparams line -> linux line -> initrd line
-  boot_wait = local.boot_wait_t
+  boot_wait              = local.boot_wait_t
+  boot_keygroup_interval = local.boot_keygroup_interval_t
   boot_command = [
-    "<down><wait>",                    # Navigate to "Start Installer"
+    "<down><wait>",                          # Navigate to "Install"
     "e<wait>",                               # Edit boot entry
-    "<down><down><down><end><wait>",                     # Move to linux line and go to end
-    " auto=true priority=critical url=http://{{ .HTTPIP }}:{{ .HTTPPort }}/preseed.cfg<wait>",
+    "<down><down><down><end><wait>",         # Move to linux line and go to end
+    " auto=true",
+    " priority=critical",
+    " url=http://{{ .HTTPIP }}:{{ .HTTPPort }}/preseed.cfg",
+    "<wait>",
     "<f10><wait>"                            # Boot with F10
   ]
 
