@@ -9,3 +9,7 @@ packer/output-*/
 .vagrant/
 
 build/
+
+# Custom provision scripts (user-specific, not tracked)
+base-iso/packer/custom-provision/*
+!base-iso/packer/custom-provision/.gitkeep
