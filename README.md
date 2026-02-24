@@ -1,8 +1,10 @@
 # ai-playground
 
-Builds a Vagrant box from a Debian 13 ISO file to be used as sandbox for coding agents.
+Builds a Vagrant Box from a Debian 13 ISO file to be used as sandbox for coding agents.
 
 Contains Claude Code, Docker, Neovim, Curl and Git by default.
+
+Would you like to install your own setup? You can customize it with [provision hooks](#customization).
 
 # Getting Started
 
@@ -78,8 +80,30 @@ See [developer.hashicorp.com/vagrant/install](https://developer.hashicorp.com/va
 </details>
 
 - Clone this repo
-- Run `make build-from-base` to build the Vagrant box. It will download a debian 13 netinst ISO, run Packer to install dependencies and build the vagrant box.
+- Run `make build-from-base` to build the Vagrant box. It will :
+  - Download a debian 13 netinst ISO
+  - Run Packer to install dependencies and build the vagrant box
+  - Add the box to Vagrant
 - All contents on ./chroot/ are copied to inside the vagrant Box, when someone runs `vagrant up`. You can customize its contents.
+
+# Customization
+
+The build uses numbered provision scripts that run in order. By default:
+
+| Prefix | Script | What it does |
+|--------|--------|-------------|
+| `00` | `base-packages.sh` | apt-get update, curl, git, neovim, rsync, zsh |
+| `10` | `shell-config.sh` | oh-my-zsh, bashrc settings (color, editor) |
+| `20` | `claude-code.sh` | Claude Code CLI, PATH config |
+| `30` | `docker.sh` | Docker, rootless Docker setup |
+
+To customize, place scripts in `base-iso/packer/custom-provision/`:
+
+- **Add a step:** Create `25-my-tools.sh` to run between Claude Code and Docker
+- **Replace a step:** Create `30-podman.sh` to replace Docker with Podman (same prefix = custom wins)
+- **Skip a step:** Create `30-skip.sh` with just `echo "Skipping Docker"`
+
+Scripts must start with `#!/bin/bash` and `set -euo pipefail`. See [docs/custom-provisioning.md](docs/custom-provisioning.md) for full details.
 
 # Why
 Using coding agents without supervision provides huge productivity, but it is also a huge security risk.

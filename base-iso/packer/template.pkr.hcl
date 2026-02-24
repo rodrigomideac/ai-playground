@@ -118,9 +118,28 @@ source "virtualbox-iso" "debian13" {
 build {
   sources = ["source.virtualbox-iso.debian13"]
 
-  # Provisioner: Install dependencies before boxing
+  # Provisioner: Upload and run provision hooks
+  provisioner "file" {
+    source      = "${path.root}/run-provision.sh"
+    destination = "/tmp/run-provision.sh"
+  }
+
+  provisioner "file" {
+    source      = "${path.root}/default-provision"
+    destination = "/tmp"
+  }
+
+  provisioner "file" {
+    source      = "${path.root}/custom-provision"
+    destination = "/tmp"
+  }
+
   provisioner "shell" {
-    script = "${path.root}/dependencies.sh"
+    inline = [
+      "chmod +x /tmp/run-provision.sh",
+      "/tmp/run-provision.sh /tmp",
+      "rm -rf /tmp/default-provision /tmp/custom-provision /tmp/run-provision.sh"
+    ]
   }
 
   # Provisioner: Apply chroot overlay
