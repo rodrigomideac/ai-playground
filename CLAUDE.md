@@ -15,3 +15,9 @@ Contents of chroot/ will be copied to the vagrant box preserving the folder stru
 
 Provisioning is split into numbered scripts in `base-iso/packer/default-provision/`. Users can override or extend provisioning by placing scripts in `base-iso/packer/custom-provision/` (gitignored). Scripts with the same numeric prefix as a default script replace it. See [docs/custom-provisioning.md](docs/custom-provisioning.md) for full details.
 
+## Documentation index
+
+Subsystem docs live as path-scoped rules under `.claude/rules/docs-*.md` and auto-load when matching files are read or edited.
+
+- [`docs-ai-sandbox-script.md`](.claude/rules/docs-ai-sandbox-script.md) — `ai-sandbox.sh` CLI + `Vagrantfile.template`: warm-VM + linked-clone architecture for spawning disposable sandbox VMs.
+
