@@ -1,124 +1,112 @@
-# Packer template for creating launcher-test Vagrant box
-# Boots custom-launcher.iso and runs automated installation
+# Packer template for the ai-playground base qcow2 image.
+#
+# Boots the Debian 13 (Trixie) generic cloud image as a KVM/QEMU VM,
+# personalizes it with a NoCloud seed ISO (ssh pubkey for user `debian`),
+# runs the default/custom provisioners over SSH, clears per-instance state,
+# shuts down, and writes build/ai-playground-base/ai-playground-base
+# (a qcow2 disk image usable directly by libvirt, Proxmox, AWS, etc.).
 
 packer {
   required_plugins {
-    virtualbox = {
-      version = ">= 1.0.0"
-      source  = "github.com/hashicorp/virtualbox"
-    }
-    vagrant = {
-      version = ">= 1.1.0"
-      source  = "github.com/hashicorp/vagrant"
+    qemu = {
+      version = ">= 1.0.9"
+      source  = "github.com/hashicorp/qemu"
     }
   }
 }
 
-# Variables
 variable "artifact_dir" {
   type        = string
   default     = "${env("ARTIFACT_DIR")}"
   description = "Output directory for artifacts (overridable via ARTIFACT_DIR env var)"
 }
 
-variable "boot_wait" {
-  type        = string
-  default     = "${env("PACKER_BOOT_WAIT")}"
-  description = "Time to wait before sending boot command (overridable via PACKER_BOOT_WAIT env var)"
-}
-
-variable "boot_keygroup_interval" {
-  type        = string
-  default     = "${env("PACKER_BOOT_KEYGROUP_INTERVAL")}"
-  description = "Delay between groups of keystrokes in boot command (overridable via PACKER_BOOT_KEYGROUP_INTERVAL env var)"
-}
-
-variable "iso_path" {
-  type        = string
-  default     = "../debian-13.3.0-amd64-netinst.iso"
-  description = "Path to custom launcher ISO"
-}
-
 variable "vm_name" {
   type        = string
   default     = "ai-playground-base"
-  description = "Name of the VM"
+  description = "Name of the VM and resulting disk artifact"
 }
 
-# Local variables (computed)
+# Pinned Debian cloud image snapshot. Bump snapshot_dir and image_filename
+# together to upgrade the base. The filename mirrors the snapshot date
+# because dated snapshots embed it (unlike the rolling `latest/` alias).
+variable "debian_snapshot_dir" {
+  type    = string
+  default = "20260413-2447"
+}
+
+variable "debian_image_filename" {
+  type    = string
+  default = "debian-13-genericcloud-amd64-20260413-2447.qcow2"
+}
+
 locals {
-  output_dir  = var.artifact_dir
-  iso_file    = var.iso_path
-  boot_wait_t             = var.boot_wait != "" ? var.boot_wait : "10s"
-  boot_keygroup_interval_t = var.boot_keygroup_interval != "" ? var.boot_keygroup_interval : "500ms"
-  timestamp                = formatdate("YYYYMMDD-hhmm", timestamp())
+  output_dir          = var.artifact_dir
+  debian_snapshot_url = "https://cloud.debian.org/images/cloud/trixie/${var.debian_snapshot_dir}"
+  debian_image_url    = "${local.debian_snapshot_url}/${var.debian_image_filename}"
+  debian_checksum_url = "file:${local.debian_snapshot_url}/SHA512SUMS"
 }
 
-# Source: VirtualBox ISO builder
-source "virtualbox-iso" "debian13" {
-  headless             = true
-  # VM settings
-  vm_name              = var.vm_name
-  guest_os_type        = "Debian_64"
-  cpus                 = 2
-  memory               = 4096
-  disk_size            = 20480 # 20GB
-  hard_drive_interface = "sata"
-  iso_interface        = "sata"
+source "qemu" "debian13" {
+  # Input: use the Debian cloud qcow2 directly as the boot disk.
+  iso_url      = local.debian_image_url
+  iso_checksum = local.debian_checksum_url
+  disk_image   = true
 
-  # ISO settings
-  iso_url      = local.iso_file
-  iso_checksum = "c9f09d24b7e834e6834f2ffa565b33d6f1f540d04bd25c79ad9953bc79a8ac02" 
+  # VM hardware.
+  # `memory` is build-time only (not a property of the resulting qcow2).
+  # 6 GB is needed because the Debian cloud image ships without swap and the
+  # Claude Code installer peak-RSS exceeds 4 GB; with no swap the OOM killer
+  # (exit 137) terminates it.
+  vm_name        = var.vm_name
+  cpus           = 2
+  memory         = 6144
+  disk_size      = "20G"
+  format         = "qcow2"
+  accelerator    = "kvm"
+  headless       = true
+  net_device     = "virtio-net"
+  disk_interface = "virtio"
 
-  # Boot settings - trigger preseed installation with GRUB EFI
-  # Menu: Live system (default) -> Live fail-safe -> Start Installer <- we want this
-  # Editor: setparams line -> linux line -> initrd line
-  boot_wait              = local.boot_wait_t
-  boot_keygroup_interval = local.boot_keygroup_interval_t
-  boot_command = [
-    "<down><wait>",                          # Navigate to "Install"
-    "e<wait>",                               # Edit boot entry
-    "<down><down><down><end><wait>",         # Move to linux line and go to end
-    " auto=true",
-    " priority=critical",
-    " url=http://{{ .HTTPIP }}:{{ .HTTPPort }}/preseed.cfg",
-    "<wait>",
-    "<f10><wait>"                            # Boot with F10
+  # Pass the host's CPU model through to the guest. qemu's default CPU model
+  # omits AVX, and Claude Code (shipped as a Bun binary) requires AVX and
+  # crashes with SIGILL (exit 132) otherwise.
+  qemuargs = [
+    ["-cpu", "host"],
   ]
 
-  # HTTP server for preseed file
-  http_directory = "${path.root}"
-  http_port_min  = 8100
-  http_port_max  = 8200
+  # NoCloud seed ISO — cloud-init reads the build-only SSH pubkey from here
+  cd_files = [
+    "${path.root}/seed/user-data",
+    "${path.root}/seed/meta-data",
+  ]
+  cd_label = "cidata"
 
-  # SSH settings - wait for installation to complete
-  ssh_username           = "rodrigo"
-  ssh_password           = "rodrigo"
-  ssh_timeout            = "6h"
+  # SSH — authenticate with the build-only keypair generated by
+  # scripts/prepare-packer-seed.sh
+  communicator           = "ssh"
+  ssh_username           = "debian"
+  ssh_private_key_file   = "${path.root}/seed/id_ed25519"
+  ssh_timeout            = "10m"
   ssh_handshake_attempts = 100
 
-  # Shutdown settings
-  shutdown_command = "echo 'rodrigo' | sudo -S shutdown -P now"
+  shutdown_command = "sudo poweroff"
   shutdown_timeout = "5m"
 
-  # VirtualBox settings
-  vboxmanage = [
-    ["modifyvm", "{{ .Name }}", "--firmware", "efi"],
-    ["modifyvm", "{{ .Name }}", "--nat-localhostreachable1", "on"],
-    ["modifyvm", "{{ .Name }}", "--graphicscontroller", "vmsvga"],
-    ["modifyvm", "{{ .Name }}", "--vram", "128"]
-  ]
-
-  # Output settings
-  format           = "ova"
   output_directory = "${local.output_dir}/packer-${var.vm_name}"
 }
 
-# Build configuration
 build {
-  sources = ["source.virtualbox-iso.debian13"]
+  sources = ["source.qemu.debian13"]
 
-  # Provisioner: Upload and run provision hooks
+  # Let cloud-init finish its first-boot work before we start apt installs
+  # of our own — otherwise provisioners race against cloud-init's package
+  # module and dpkg locks.
+  provisioner "shell" {
+    inline = ["sudo cloud-init status --wait"]
+  }
+
+  # Upload and run the numbered provisioning hooks
   provisioner "file" {
     source      = "${path.root}/run-provision.sh"
     destination = "/tmp/run-provision.sh"
@@ -142,7 +130,7 @@ build {
     ]
   }
 
-  # Provisioner: Apply chroot overlay
+  # Apply chroot overlay
   provisioner "file" {
     source      = "${path.root}/../../chroot"
     destination = "/tmp"
@@ -161,11 +149,18 @@ build {
     ]
   }
 
-  # Post-processor: Convert to Vagrant box
-  post-processor "vagrant" {
-    output              = "${local.output_dir}/debian13.box"
-    compression_level   = 6
-    keep_input_artifact = false
-    provider_override   = "virtualbox"
+  # Poor-man's sysprep: strip per-instance state so the qcow2 is a reusable
+  # golden image. Any clone's first boot will regenerate machine-id and SSH
+  # host keys; cloud-init will re-run with the clone's own user-data.
+  # (Upgrade path: install libguestfs and run `virt-sysprep` post-build.)
+  provisioner "shell" {
+    inline = [
+      "sudo cloud-init clean --logs --seed",
+      "sudo truncate -s 0 /etc/machine-id",
+      "sudo rm -f /var/lib/dbus/machine-id",
+      "sudo rm -f /etc/ssh/ssh_host_*",
+      "sudo rm -rf /var/log/*.log /var/log/*.gz /var/log/installer",
+      "sudo rm -f /root/.bash_history /home/debian/.bash_history"
+    ]
   }
 }

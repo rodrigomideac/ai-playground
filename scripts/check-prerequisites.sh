@@ -1,9 +1,9 @@
 #!/bin/bash
 set -euo pipefail
 
-# Verifies that all required tools and system state are present before
-# running the build. Exits with a non-zero status and a summary of
-# missing prerequisites if any check fails.
+# Verifies that the tools and system state needed for the qemu-based
+# Packer build are present. Exits non-zero with a summary if anything is
+# missing.
 
 errors=0
 
@@ -24,16 +24,22 @@ echo
 # --- Required commands ---
 
 check_command curl \
-  "Fedora/CentOS: dnf install curl | Ubuntu: apt install curl | Manjaro: pacman -S curl"
+  "Fedora: dnf install curl | Ubuntu: apt install curl | Manjaro: pacman -S curl"
 
 check_command git \
-  "Fedora/CentOS: dnf install git | Ubuntu: apt install git | Manjaro: pacman -S git"
+  "Fedora: dnf install git | Ubuntu: apt install git | Manjaro: pacman -S git"
 
-check_command vagrant \
-  "See https://developer.hashicorp.com/vagrant/install"
+check_command qemu-system-x86_64 \
+  "Fedora: dnf install @virtualization | Ubuntu: apt install qemu-system-x86 | Manjaro: pacman -S qemu-desktop"
 
-check_command VBoxManage \
-  "Fedora: dnf install VirtualBox | Ubuntu: apt install virtualbox | CentOS: see https://www.virtualbox.org/wiki/Linux_Downloads | Manjaro: pacman -S virtualbox"
+check_command qemu-img \
+  "Shipped with qemu; see qemu-system-x86_64 hint above."
+
+check_command xorriso \
+  "Fedora: dnf install xorriso | Ubuntu: apt install xorriso | Manjaro: pacman -S libisoburn"
+
+check_command ssh-keygen \
+  "Fedora/Ubuntu: apt/dnf install openssh-clients | Manjaro: pacman -S openssh"
 
 # --- Packer: installed and not the cracklib imposter ---
 
@@ -41,9 +47,6 @@ check_command packer \
   "See https://developer.hashicorp.com/packer/install"
 
 if command -v packer &>/dev/null; then
-
-  # The cracklib 'packer' binary does not support the 'version' subcommand.
-  # HashiCorp Packer prints its version string starting with "Packer v".
   packer_version_output=$(packer version 2>&1 || true)
   if ! echo "$packer_version_output" | grep -q "^Packer v"; then
     echo "error: 'packer' binary found but it does not appear to be HashiCorp Packer." >&2
@@ -54,16 +57,22 @@ if command -v packer &>/dev/null; then
   fi
 fi
 
-# --- VirtualBox kernel modules ---
+# --- KVM access ---
 
-if command -v VBoxManage &>/dev/null; then
-  if ! VBoxManage list hostinfo &>/dev/null; then
-    echo "error: VirtualBox kernel modules are not loaded (vboxdrv)." >&2
-    echo "  This commonly happens after a kernel update without reboot," >&2
-    echo "  or when Secure Boot blocks unsigned modules." >&2
-    echo "  Try: reboot, or load modules manually, or enroll MOK for Secure Boot." >&2
-    errors=$((errors + 1))
-  fi
+if [ ! -e /dev/kvm ]; then
+  echo "error: /dev/kvm does not exist. Load the kvm_intel or kvm_amd module," >&2
+  echo "  or enable VT-x / AMD-V in BIOS/UEFI firmware." >&2
+  errors=$((errors + 1))
+elif [ ! -r /dev/kvm ] || [ ! -w /dev/kvm ]; then
+  echo "error: /dev/kvm exists but the current user lacks read+write access." >&2
+  echo "  Add yourself to the 'kvm' group and re-login: sudo usermod -aG kvm \$USER" >&2
+  errors=$((errors + 1))
+fi
+
+if ! grep -Eq '(vmx|svm)' /proc/cpuinfo; then
+  echo "error: CPU does not expose virtualization extensions (vmx/svm)." >&2
+  echo "  Enable VT-x / AMD-V in BIOS/UEFI firmware." >&2
+  errors=$((errors + 1))
 fi
 
 # --- Summary ---
