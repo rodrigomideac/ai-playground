@@ -90,7 +90,15 @@ source "qemu" "debian13" {
   ssh_timeout            = "10m"
   ssh_handshake_attempts = 100
 
-  shutdown_command = "sudo poweroff"
+  # Remove the build-only `debian` user (and its build-time SSH pubkey
+  # under /home/debian/.ssh/authorized_keys) as the very last act, then
+  # power off. The cleanup provisioner can't do this because once `debian`
+  # is gone, subsequent sudo calls from the SSH session fail. Run
+  # everything as root in one `sudo bash -c` so no further sudo is needed
+  # after userdel. The cloud-init seed used by ai-playground at runtime
+  # creates a fresh per-VM user, so the absence of `debian` is invisible
+  # to consumers of the image.
+  shutdown_command = "sudo bash -c 'userdel -rf debian 2>/dev/null; rm -rf /home/debian; poweroff'"
   shutdown_timeout = "5m"
 
   output_directory = "${local.output_dir}/packer-${var.vm_name}"
