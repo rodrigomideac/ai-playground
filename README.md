@@ -134,7 +134,7 @@ cli/                  Go module
   internal/worker/      Manager, Worker, NoCloud seed builder
 scripts/              Build helpers (prereqs, prep seed, provision-chroot, lint)
 tests/                bats end-to-end test suite
-docs/                 Long-form docs (e.g. custom-provisioning.md)
+.claude/rules/        Auto-loaded Claude docs rules (one per subsystem)
 ```
 
 ## Customization
@@ -152,5 +152,6 @@ override provisioning steps. By default:
 Same numeric prefix replaces the default. To add a step at position 25
 between Claude Code and Docker, drop `custom-provision/25-my-tools.sh`.
 To skip Docker, drop `custom-provision/30-skip.sh` containing only
-`echo "skipping"`. Full details in
-[docs/custom-provisioning.md](docs/custom-provisioning.md).
+`echo "skipping"`. Full reference (override rule, naming convention,
+script-writing rules, debugging tips) is in
+[`.claude/rules/docs-provisioning-hooks.md`](.claude/rules/docs-provisioning-hooks.md).

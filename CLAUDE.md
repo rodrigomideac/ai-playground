@@ -24,10 +24,10 @@ snapshot requires updating `debian_snapshot_dir` and
 
 Provisioning at build time is split into numbered scripts in
 `packer/default-provision/`. Users can override or extend by
-placing scripts in `packer/custom-provision/` (gitignored);
-same numeric prefix replaces the default. See
-[docs/custom-provisioning.md](docs/custom-provisioning.md) for full
-details.
+placing scripts in `packer/custom-provision/` (gitignored); same
+numeric prefix replaces the default. Full reference (override rule,
+naming, script-writing rules, common patterns) lives in the
+auto-loaded rule [`docs-provisioning-hooks.md`](.claude/rules/docs-provisioning-hooks.md).
 
 ## Documentation index
 
@@ -47,3 +47,8 @@ or edited.
   `packer/template.pkr.hcl`. Used to disambiguate image bugs
   from libvirt/CLI bugs, and as the diff baseline for libvirt-specific
   qemu issues.
+- [`docs-provisioning-hooks.md`](.claude/rules/docs-provisioning-hooks.md)
+  — Packer's numbered hook chain (`packer/run-provision.sh` +
+  `packer/{default,custom}-provision/`): override rule, naming
+  convention, script-writing rules, and common patterns for inserting,
+  replacing, or skipping default provisioners.
