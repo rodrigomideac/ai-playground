@@ -1,12 +1,12 @@
 ---
 paths:
-  - "cmd/ai-playground/**"
-  - "internal/worker/**"
+  - "cli/cmd/ai-playground/**"
+  - "cli/internal/worker/**"
 ---
 
 # `ai-playground` Go CLI — worker pool orchestration
 
-`ai-playground` is the Go binary in `cmd/ai-playground/` that manages a
+`ai-playground` is the Go binary in `cli/cmd/ai-playground/` that manages a
 local pool of Debian *worker* VMs cloned from the golden qcow2 image
 (built by `make build-from-base`). It shells out to `virsh`,
 `virt-install`, `qemu-img`, and `xorriso`; libvirt is the source of
@@ -27,7 +27,7 @@ ai-playground list-workers            # print the pool
 The `[name]`-optional commands fall back to a uniformly random
 *running* worker via `Manager.Random(ctx)`. Auto-generated names look
 like `worker-3f9a17`. Names that come from users are validated against
-`[a-z0-9][a-z0-9-]{0,29}` (`internal/worker/name.go`).
+`[a-z0-9][a-z0-9-]{0,29}` (`cli/internal/worker/name.go`).
 
 Persistent flags (every subcommand): `--ssh-pubkey`, `--golden`,
 `--pool`, `--network`, `--prefix`, `--ssh-user`. Defaults work for
@@ -52,7 +52,7 @@ fallback (`virsh destroy && virsh undefine --remove-all-storage
 
 ## Non-obvious traps in the virt-install args
 
-These are encoded in `internal/worker/manager.go`'s `Create` `args`
+These are encoded in `cli/internal/worker/manager.go`'s `Create` `args`
 slice. Every flag listed here has a comment in code; do not strip
 them without re-reading this section.
 
@@ -101,7 +101,7 @@ created in the pool inherit the `libvirt` group, which interacts
 correctly with libvirt's `dynamic_ownership` (libvirt chowns disk
 files to qemu/libvirt-qemu when the VM starts).
 
-## NoCloud seed mechanics (`internal/worker/seed.go`)
+## NoCloud seed mechanics (`cli/internal/worker/seed.go`)
 
 `BuildSeedISO` writes `user-data` (Go-template-rendered) and
 `meta-data` to a temp dir, then runs `xorriso -as mkisofs -volid
@@ -154,7 +154,7 @@ The 9p mount feature (`add-worker --mount /host/path`):
 
 `packer/template.pkr.hcl` pins **`machine_type = "pc"`** (i440fx +
 SeaBIOS) and **`-cpu host`** (in `qemuargs`). The CLI mirrors those
-exactly in `internal/worker/manager.go`'s virt-install args:
+exactly in `cli/internal/worker/manager.go`'s virt-install args:
 **`--machine pc`** and **`--cpu host-passthrough`** (libvirt's name
 for qemu's `-cpu host`). If you change either in the Packer template,
 the CLI must move in lockstep — the GRUB-loop debugging encoded in

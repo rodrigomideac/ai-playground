@@ -21,4 +21,4 @@ packer/seed/id_ed25519.pub
 packer/seed/user-data
 
 # Go CLI build output
-/bin/
+/cli/bin/

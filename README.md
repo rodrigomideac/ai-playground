@@ -84,13 +84,13 @@ plays nicely with libvirt's `dynamic_ownership`.)
 
 ```bash
 make build-from-base   # downloads the Debian cloud qcow2, bakes provisioners (~3-5 min)
-make build-cli         # builds bin/ai-playground (~5s)
+make build-cli         # builds cli/bin/ai-playground (~5s)
 ```
 
 Optionally put the CLI on `$PATH`:
 
 ```bash
-sudo install -m 0755 bin/ai-playground /usr/local/bin/
+sudo install -m 0755 cli/bin/ai-playground /usr/local/bin/
 ```
 
 ### Use
@@ -129,8 +129,9 @@ packer/      Packer template (qemu builder, cloud-image input)
   default-provision/    Numbered provisioning scripts run during build
   seed/                 Build-only NoCloud seed (gitignored runtime files)
 chroot/etc/skel/      Files copied into each worker's home at user creation
-cmd/ai-playground/    Go CLI source
-internal/worker/      Worker package (Manager, Worker, seed builder)
+cli/                  Go module
+  cmd/ai-playground/    binary entrypoint
+  internal/worker/      Manager, Worker, NoCloud seed builder
 scripts/              Build helpers (prereqs, prep seed, provision-chroot, lint)
 tests/                bats end-to-end test suite
 docs/                 Long-form docs (e.g. custom-provisioning.md)

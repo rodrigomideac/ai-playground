@@ -13,7 +13,7 @@
 # the test passed, failed, or crashed mid-flight.
 
 REPO_ROOT="$(git -C "$(dirname "$BATS_TEST_FILENAME")" rev-parse --show-toplevel)"
-AIP_BIN="$REPO_ROOT/bin/ai-playground"
+AIP_BIN="$REPO_ROOT/cli/bin/ai-playground"
 GOLDEN_IMAGE="$REPO_ROOT/build/packer-ai-playground-base/ai-playground-base"
 TEST_PREFIX="aiptest"
 

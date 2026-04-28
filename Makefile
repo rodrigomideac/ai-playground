@@ -1,6 +1,6 @@
 check:
 	bash ./scripts/lint-sh.sh
-	go vet ./...
+	cd cli && go vet ./...
 
 build-from-base:
 	bash ./scripts/check-prerequisites.sh
@@ -10,7 +10,7 @@ build-from-base:
 	cd packer && ARTIFACT_DIR=../build packer build template.pkr.hcl
 
 build-cli:
-	go build -o bin/ai-playground ./cmd/ai-playground
+	cd cli && go build -o bin/ai-playground ./cmd/ai-playground
 
 test:
 	@command -v bats >/dev/null 2>&1 || { \
@@ -21,6 +21,6 @@ test:
 	  echo "  macOS: brew install bats-core" >&2; \
 	  exit 1; \
 	}
-	@[ -x bin/ai-playground ] || { echo "error: bin/ai-playground missing — run 'make build-cli' first" >&2; exit 1; }
+	@[ -x cli/bin/ai-playground ] || { echo "error: cli/bin/ai-playground missing — run 'make build-cli' first" >&2; exit 1; }
 	@[ -f build/packer-ai-playground-base/ai-playground-base ] || { echo "error: golden image missing — run 'make build-from-base' first" >&2; exit 1; }
 	bats tests/

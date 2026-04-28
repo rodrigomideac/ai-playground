@@ -36,7 +36,7 @@ Subsystem docs live as path-scoped rules under
 or edited.
 
 - [`docs-ai-playground-cli.md`](.claude/rules/docs-ai-playground-cli.md)
-  — `cmd/ai-playground` Go CLI + `internal/worker`: libvirt-based
+  — `cli/cmd/ai-playground` Go CLI + `cli/internal/worker`: libvirt-based
   orchestration for a pool of disposable worker VMs cloned from the
   golden qcow2. Covers the public surface
   (`add-worker`/`ssh-worker`/`shutdown-worker`/`list-workers`), the
