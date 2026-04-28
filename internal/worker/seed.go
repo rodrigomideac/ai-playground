@@ -1,4 +1,4 @@
-package sandbox
+package worker
 
 import (
 	"context"
@@ -42,10 +42,10 @@ type seedData struct {
 }
 
 // BuildSeedISO writes a NoCloud seed ISO at out. The ISO contains user-data
-// (creates the sandbox user with the given pubkey, optionally configures a
+// (creates the worker user with the given pubkey, optionally configures a
 // virtio-9p mount) and meta-data (instance-id + hostname).
 func BuildSeedISO(ctx context.Context, out, hostname, user, pubKey string, hostMount bool) error {
-	dir, err := os.MkdirTemp("", "ai-sandbox-seed-")
+	dir, err := os.MkdirTemp("", "ai-playground-seed-")
 	if err != nil {
 		return err
 	}

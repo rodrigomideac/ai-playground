@@ -1,4 +1,4 @@
-package sandbox
+package worker
 
 import (
 	"crypto/rand"
@@ -12,7 +12,7 @@ import (
 // libvirt itself because users will type these and we want them shell-safe.
 var nameRegex = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,29}$`)
 
-// ValidateName returns an error if name violates the sandbox naming rules.
+// ValidateName returns an error if name violates the worker naming rules.
 func ValidateName(name string) error {
 	if !nameRegex.MatchString(name) {
 		return fmt.Errorf("invalid name %q: must match %s", name, nameRegex)
@@ -20,9 +20,9 @@ func ValidateName(name string) error {
 	return nil
 }
 
-// GenerateName returns a random short name like "sandbox-3f9a17".
+// GenerateName returns a random short name like "worker-3f9a17".
 func GenerateName() string {
 	var b [3]byte
 	_, _ = rand.Read(b[:])
-	return "sandbox-" + hex.EncodeToString(b[:])
+	return "worker-" + hex.EncodeToString(b[:])
 }

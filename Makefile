@@ -10,4 +10,4 @@ build-from-base:
 	cd base-iso/packer && ARTIFACT_DIR=../../build packer build template.pkr.hcl
 
 build-cli:
-	go build -o bin/ai-sandbox ./cmd/ai-sandbox
+	go build -o bin/ai-playground ./cmd/ai-playground

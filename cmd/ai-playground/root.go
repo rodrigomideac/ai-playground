@@ -8,11 +8,10 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/rodrigomideac/ai-playground/internal/sandbox"
+	"github.com/rodrigomideac/ai-playground/internal/worker"
 )
 
-// globalOpts are persistent flags shared by every subcommand. Sourced from
-// flags or the AI_SANDBOX_* environment variables.
+// globalOpts are persistent flags shared by every subcommand.
 var globalOpts struct {
 	pubkey  string
 	golden  string
@@ -23,24 +22,29 @@ var globalOpts struct {
 }
 
 var rootCmd = &cobra.Command{
-	Use:   "ai-sandbox",
-	Short: "Spawn and manage local KVM/libvirt sandbox VMs from the ai-playground golden image",
-	Long: `ai-sandbox creates disposable Debian sandbox VMs cloned from a golden
-qcow2 image (built by 'make build-from-base'). Each sandbox is a libvirt
-domain on the default libvirt network with its own DHCP-assigned IP.
+	Use:   "ai-playground",
+	Short: "Manage a pool of disposable Debian worker VMs (KVM/libvirt + cloud-init)",
+	Long: `ai-playground spins up and manages a local pool of Debian worker VMs
+cloned from the golden qcow2 image (built by 'make build-from-base').
+Each worker gets a DHCP-assigned IP on libvirt's default network.
 
-The image is linked-cloned via qcow2 backing files, so creation is fast.
-Per-sandbox personalization (hostname, user, SSH key, optional 9p mount)
-is delivered by a NoCloud cloud-init seed ISO attached at first boot.
+Per-worker personalization (hostname, user, SSH key, optional 9p mount)
+is delivered by a NoCloud cloud-init seed ISO at first boot. The image
+is linked-cloned via qcow2 backing files, so creation is fast and cheap.
 
 Domain names are prefixed (default "aip-") so they don't collide with
-other libvirt VMs on the host.`,
+other libvirt VMs on the host.
+
+Surface:
+  add-worker [name]       Spin up a new worker, then print the pool.
+  ssh-worker [name]       SSH into a worker (random running one if no name).
+  shutdown-worker [name]  Tear down a worker (random running one if no name).
+  list-workers            Print the pool.`,
 }
 
 func init() {
-	defaultPubkey := defaultPubKey()
-	rootCmd.PersistentFlags().StringVar(&globalOpts.pubkey, "ssh-pubkey", defaultPubkey,
-		"SSH public key file authorized for the sandbox user")
+	rootCmd.PersistentFlags().StringVar(&globalOpts.pubkey, "ssh-pubkey", defaultPubKey(),
+		"SSH public key file authorized for the worker user")
 	rootCmd.PersistentFlags().StringVar(&globalOpts.golden, "golden", defaultGolden(),
 		"Path to the golden qcow2 image")
 	rootCmd.PersistentFlags().StringVar(&globalOpts.pool, "pool", "default",
@@ -50,11 +54,10 @@ func init() {
 	rootCmd.PersistentFlags().StringVar(&globalOpts.prefix, "prefix", "aip",
 		"libvirt domain name prefix")
 	rootCmd.PersistentFlags().StringVar(&globalOpts.sshUser, "ssh-user", "vm",
-		"User created inside the sandbox VM")
+		"User created inside each worker VM")
 }
 
-// newManager constructs a sandbox.Manager from the resolved global flags.
-func newManager() (*sandbox.Manager, error) {
+func newManager() (*worker.Manager, error) {
 	if globalOpts.pubkey == "" {
 		return nil, fmt.Errorf("no SSH public key found; pass --ssh-pubkey")
 	}
@@ -66,7 +69,7 @@ func newManager() (*sandbox.Manager, error) {
 	if err != nil {
 		return nil, fmt.Errorf("resolve --golden: %w", err)
 	}
-	return &sandbox.Manager{
+	return &worker.Manager{
 		GoldenImage: golden,
 		Pool:        globalOpts.pool,
 		Network:     globalOpts.network,

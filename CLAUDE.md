@@ -19,6 +19,6 @@ Provisioning is split into numbered scripts in `base-iso/packer/default-provisio
 
 Subsystem docs live as path-scoped rules under `.claude/rules/docs-*.md` and auto-load when matching files are read or edited.
 
-- [`docs-ai-sandbox-cli.md`](.claude/rules/docs-ai-sandbox-cli.md) — `cmd/ai-sandbox` Go CLI + `internal/sandbox`: libvirt-based orchestration for sandbox VMs cloned from the golden qcow2. Covers the non-obvious virt-install traps (`--machine pc`, `--video vga`, vCPU topology) and the `/var/lib/libvirt/images` permission setup.
+- [`docs-ai-playground-cli.md`](.claude/rules/docs-ai-playground-cli.md) — `cmd/ai-playground` Go CLI + `internal/worker`: libvirt-based orchestration for a pool of disposable worker VMs cloned from the golden qcow2. Covers the public surface (`add-worker`/`ssh-worker`/`shutdown-worker`/`list-workers`), the non-obvious virt-install traps (`--machine pc`, `--video vga`, vCPU topology), and the `/var/lib/libvirt/images` permission setup.
 - [`docs-ai-sandbox-script.md`](.claude/rules/docs-ai-sandbox-script.md) — `ai-sandbox.sh` shell CLI + `Vagrantfile.template`: warm-VM + linked-clone architecture for spawning disposable sandbox VMs. Will be retired once the Go CLI fully replaces it.
 

@@ -1,8 +1,9 @@
-package sandbox
+package worker
 
 import (
 	"context"
 	"fmt"
+	"math/rand/v2"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -10,8 +11,8 @@ import (
 	"strings"
 )
 
-// Manager creates and looks up sandbox VMs. Construct one per CLI invocation;
-// it carries the configuration that's the same across all sandboxes.
+// Manager creates and looks up workers. Construct one per CLI invocation;
+// it carries the configuration that's the same across all workers.
 type Manager struct {
 	GoldenImage string // absolute path to the golden qcow2
 	Pool        string // libvirt storage pool (typically "default")
@@ -21,20 +22,18 @@ type Manager struct {
 	SSHPubKey   string // pubkey contents (not path) authorized for SSHUser
 }
 
-// CreateOptions are per-sandbox knobs.
+// CreateOptions are per-worker knobs.
 type CreateOptions struct {
 	Memory    int    // MiB
 	CPUs      int
-	HostMount string // host directory to share at /home/<SSHUser>/project; empty disables
+	HostMount string // host directory shared at /home/<SSHUser>/project; empty disables
 }
 
-// DomainName returns the libvirt domain name for a given sandbox name.
+// DomainName returns the libvirt domain name for a given worker name.
 func (m *Manager) DomainName(name string) string {
 	return m.Prefix + "-" + name
 }
 
-// stripPrefix returns the user-facing name from a libvirt domain name,
-// or "" if domain doesn't carry our prefix.
 func (m *Manager) stripPrefix(domain string) string {
 	pref := m.Prefix + "-"
 	if !strings.HasPrefix(domain, pref) {
@@ -43,9 +42,9 @@ func (m *Manager) stripPrefix(domain string) string {
 	return domain[len(pref):]
 }
 
-// Create provisions a new sandbox: linked-clone overlay + NoCloud seed +
-// virt-install --import. Returns a Sandbox describing the result.
-func (m *Manager) Create(ctx context.Context, name string, opts CreateOptions) (*Sandbox, error) {
+// Create provisions a new worker: linked-clone overlay + NoCloud seed +
+// virt-install --import. Returns a Worker describing the result.
+func (m *Manager) Create(ctx context.Context, name string, opts CreateOptions) (*Worker, error) {
 	if name == "" {
 		name = GenerateName()
 	}
@@ -71,7 +70,7 @@ func (m *Manager) Create(ctx context.Context, name string, opts CreateOptions) (
 		return nil, fmt.Errorf("resolve pool path: %w", err)
 	}
 
-	s := &Sandbox{
+	w := &Worker{
 		Name:       name,
 		DomainName: domain,
 		DiskPath:   filepath.Join(poolPath, domain+".qcow2"),
@@ -82,14 +81,14 @@ func (m *Manager) Create(ctx context.Context, name string, opts CreateOptions) (
 	if err := run(ctx, "qemu-img", "create",
 		"-f", "qcow2", "-F", "qcow2",
 		"-b", m.GoldenImage,
-		s.DiskPath); err != nil {
+		w.DiskPath); err != nil {
 		return nil, fmt.Errorf("create overlay: %w", err)
 	}
 
-	// 2. NoCloud seed ISO with this VM's identity + ssh key
+	// 2. NoCloud seed ISO with this worker's identity + ssh key
 	hostMount := opts.HostMount != ""
-	if err := BuildSeedISO(ctx, s.SeedPath, name, m.SSHUser, m.SSHPubKey, hostMount); err != nil {
-		_ = os.Remove(s.DiskPath)
+	if err := BuildSeedISO(ctx, w.SeedPath, name, m.SSHUser, m.SSHPubKey, hostMount); err != nil {
+		_ = os.Remove(w.DiskPath)
 		return nil, fmt.Errorf("build seed iso: %w", err)
 	}
 
@@ -101,29 +100,23 @@ func (m *Manager) Create(ctx context.Context, name string, opts CreateOptions) (
 		"--connect", "qemu:///system",
 		"--name", domain,
 		"--memory", strconv.Itoa(opts.Memory),
-		// Pin a 1-socket topology. virt-install's default for --vcpus N is
-		// "sockets=N,cores=1,threads=1" (one CPU per socket). On i440fx
-		// (the machine the image was built on) that produces a multi-
-		// socket layout the chipset can't represent, and the guest
-		// triple-faults during early boot before printing anything to
-		// the serial console — visible only as a GRUB reboot loop.
+		// Pin a 1-socket topology — virt-install's default for --vcpus N
+		// expands to "sockets=N,cores=1,threads=1" (one CPU per socket).
 		"--vcpus", fmt.Sprintf("%d,sockets=1,cores=%d,threads=1", opts.CPUs, opts.CPUs),
 		"--cpu", "host-passthrough",
-		// Match Packer's machine type. Packer's qemu builder defaults to
-		// i440fx ("pc") + SeaBIOS, which is what the golden image's GRUB
-		// expects. virt-install defaults to q35 (often with UEFI) for
-		// modern guests, which boots into a GRUB loop on this image.
+		// Match Packer's machine type. The golden image is built on i440fx
+		// + SeaBIOS; virt-install defaults to q35 (with UEFI) on Debian 13,
+		// which boots into a GRUB loop on this image.
 		"--machine", "pc",
-		// libvirt's default qemu invocation passes -nodefaults, which
-		// strips the default VGA device. Without a VGA card on i440fx
-		// the Debian cloud kernel triple-faults during early boot
-		// (visible only as a GRUB reboot loop on the serial console).
-		// Re-adding any video device fixes it; vga is the cheapest.
+		// libvirt's qemu invocation includes -nodefaults, which strips the
+		// default VGA. Without a video device on i440fx the cloud kernel
+		// triple-faults during early boot — visible only as a once-per-
+		// second GRUB reboot loop on the serial console.
 		"--video", "vga",
 		"--os-variant", "debian13",
 		"--import",
-		"--disk", fmt.Sprintf("path=%s,format=qcow2,bus=virtio", s.DiskPath),
-		"--disk", fmt.Sprintf("path=%s,device=cdrom", s.SeedPath),
+		"--disk", fmt.Sprintf("path=%s,format=qcow2,bus=virtio", w.DiskPath),
+		"--disk", fmt.Sprintf("path=%s,device=cdrom", w.SeedPath),
 		"--network", fmt.Sprintf("network=%s,model=virtio", m.Network),
 		"--graphics", "none",
 		"--noautoconsole",
@@ -137,15 +130,15 @@ func (m *Manager) Create(ctx context.Context, name string, opts CreateOptions) (
 			fmt.Sprintf("type=mount,source=%s,target=hostshare,accessmode=passthrough", abs))
 	}
 	if err := run(ctx, "virt-install", args...); err != nil {
-		_ = os.Remove(s.DiskPath)
-		_ = os.Remove(s.SeedPath)
+		_ = os.Remove(w.DiskPath)
+		_ = os.Remove(w.SeedPath)
 		return nil, fmt.Errorf("virt-install: %w", err)
 	}
-	return s, nil
+	return w, nil
 }
 
-// Get returns the Sandbox for a name, or an error if it doesn't exist.
-func (m *Manager) Get(ctx context.Context, name string) (*Sandbox, error) {
+// Get returns the Worker for a name, or an error if no such worker exists.
+func (m *Manager) Get(ctx context.Context, name string) (*Worker, error) {
 	if err := ValidateName(name); err != nil {
 		return nil, err
 	}
@@ -153,11 +146,11 @@ func (m *Manager) Get(ctx context.Context, name string) (*Sandbox, error) {
 	if exists, err := m.domainExists(ctx, domain); err != nil {
 		return nil, err
 	} else if !exists {
-		return nil, fmt.Errorf("no sandbox named %q", name)
+		return nil, fmt.Errorf("no worker named %q", name)
 	}
 	state, _ := m.domainState(ctx, domain)
 	poolPath, _ := m.poolPath(ctx)
-	return &Sandbox{
+	return &Worker{
 		Name:       name,
 		DomainName: domain,
 		DiskPath:   filepath.Join(poolPath, domain+".qcow2"),
@@ -166,14 +159,14 @@ func (m *Manager) Get(ctx context.Context, name string) (*Sandbox, error) {
 	}, nil
 }
 
-// List returns every sandbox carrying our prefix.
-func (m *Manager) List(ctx context.Context) ([]*Sandbox, error) {
+// List returns every worker carrying our prefix, in libvirt's iteration order.
+func (m *Manager) List(ctx context.Context) ([]*Worker, error) {
 	out, err := runCapture(ctx, "virsh", "-c", "qemu:///system",
 		"list", "--all", "--name")
 	if err != nil {
 		return nil, err
 	}
-	var result []*Sandbox
+	var result []*Worker
 	for _, line := range strings.Split(string(out), "\n") {
 		domain := strings.TrimSpace(line)
 		name := m.stripPrefix(domain)
@@ -181,7 +174,7 @@ func (m *Manager) List(ctx context.Context) ([]*Sandbox, error) {
 			continue
 		}
 		state, _ := m.domainState(ctx, domain)
-		result = append(result, &Sandbox{
+		result = append(result, &Worker{
 			Name:       name,
 			DomainName: domain,
 			State:      state,
@@ -190,9 +183,28 @@ func (m *Manager) List(ctx context.Context) ([]*Sandbox, error) {
 	return result, nil
 }
 
+// Random returns a uniformly random worker that is currently running. Errors
+// when the pool has no running workers. Used by `ssh-worker` and
+// `shutdown-worker` when invoked without a name.
+func (m *Manager) Random(ctx context.Context) (*Worker, error) {
+	workers, err := m.List(ctx)
+	if err != nil {
+		return nil, err
+	}
+	var running []*Worker
+	for _, w := range workers {
+		if w.State == "running" {
+			running = append(running, w)
+		}
+	}
+	if len(running) == 0 {
+		return nil, fmt.Errorf("no running workers in the pool")
+	}
+	return running[rand.IntN(len(running))], nil
+}
+
 func (m *Manager) domainExists(ctx context.Context, domain string) (bool, error) {
-	err := runQuiet(ctx, "virsh", "-c", "qemu:///system", "dominfo", domain)
-	if err == nil {
+	if err := runQuiet(ctx, "virsh", "-c", "qemu:///system", "dominfo", domain); err == nil {
 		return true, nil
 	}
 	// virsh exits non-zero for "not found"; we treat any error as "doesn't exist".

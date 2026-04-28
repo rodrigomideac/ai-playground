@@ -16,9 +16,9 @@ func contextWithTimeout(parent context.Context, d time.Duration) (context.Contex
 	return context.WithTimeout(parent, d)
 }
 
-// execve replaces the current process image. Used by `ai-sandbox ssh` so the
-// user gets a real TTY hand-off (signals, terminal modes) rather than a child
-// process the Go runtime is babysitting.
+// execve replaces the current process image. Used by `ai-playground ssh-worker`
+// so the user gets a real TTY hand-off (signals, terminal modes) rather than a
+// child process the Go runtime is babysitting.
 func execve(bin string, argv []string, envv []string) error {
 	return syscall.Exec(bin, argv, envv)
 }

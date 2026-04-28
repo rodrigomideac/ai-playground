@@ -1,4 +1,4 @@
-package sandbox
+package worker
 
 import (
 	"context"
@@ -7,8 +7,9 @@ import (
 	"time"
 )
 
-// Sandbox is one libvirt domain spawned from the golden image.
-type Sandbox struct {
+// Worker is one libvirt domain spawned from the golden image — a single
+// member of the worker pool.
+type Worker struct {
 	Name       string // user-facing, no prefix
 	DomainName string // libvirt domain name (Prefix + "-" + Name)
 	DiskPath   string // qcow2 overlay file
@@ -16,12 +17,12 @@ type Sandbox struct {
 	State      string // libvirt state ("running", "shut off", ...) — populated by List/Get
 }
 
-// IP returns the first IPv4 lease on the default libvirt network for this
-// sandbox. Returns an error (not an empty string) when no lease is yet
-// available, so callers can poll cleanly.
-func (s *Sandbox) IP(ctx context.Context) (string, error) {
+// IP returns the first IPv4 lease on the libvirt network for this worker.
+// Returns an error (not an empty string) when no lease is yet available, so
+// callers can poll cleanly.
+func (w *Worker) IP(ctx context.Context) (string, error) {
 	out, err := runCapture(ctx, "virsh", "-c", "qemu:///system",
-		"domifaddr", s.DomainName)
+		"domifaddr", w.DomainName)
 	if err != nil {
 		return "", err
 	}
@@ -35,14 +36,14 @@ func (s *Sandbox) IP(ctx context.Context) (string, error) {
 			return ip, nil
 		}
 	}
-	return "", fmt.Errorf("no IPv4 lease yet for %s", s.DomainName)
+	return "", fmt.Errorf("no IPv4 lease yet for %s", w.DomainName)
 }
 
 // IPWait polls IP() until it succeeds or timeout elapses.
-func (s *Sandbox) IPWait(ctx context.Context, timeout time.Duration) (string, error) {
+func (w *Worker) IPWait(ctx context.Context, timeout time.Duration) (string, error) {
 	deadline := time.Now().Add(timeout)
 	for {
-		ip, err := s.IP(ctx)
+		ip, err := w.IP(ctx)
 		if err == nil {
 			return ip, nil
 		}
@@ -57,14 +58,12 @@ func (s *Sandbox) IPWait(ctx context.Context, timeout time.Duration) (string, er
 	}
 }
 
-// Destroy powers off the VM (best-effort) and removes the libvirt domain
-// along with its storage volumes.
-func (s *Sandbox) Destroy(ctx context.Context) error {
-	// Best-effort power off; ignore error if the domain is already shut off.
-	_ = runQuiet(ctx, "virsh", "-c", "qemu:///system", "destroy", s.DomainName)
-
+// Destroy powers off the worker (best-effort) and removes the libvirt domain
+// along with its storage volumes. Used by `shutdown-worker`.
+func (w *Worker) Destroy(ctx context.Context) error {
+	_ = runQuiet(ctx, "virsh", "-c", "qemu:///system", "destroy", w.DomainName)
 	if err := run(ctx, "virsh", "-c", "qemu:///system",
-		"undefine", "--remove-all-storage", s.DomainName); err != nil {
+		"undefine", "--remove-all-storage", w.DomainName); err != nil {
 		return fmt.Errorf("undefine domain: %w", err)
 	}
 	return nil
