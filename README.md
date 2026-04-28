@@ -131,7 +131,7 @@ base-iso/packer/      Packer template (qemu builder, cloud-image input)
 chroot/etc/skel/      Files copied into each worker's home at user creation
 cmd/ai-playground/    Go CLI source
 internal/worker/      Worker package (Manager, Worker, seed builder)
-scripts/              Build helpers (prereqs, prep seed, provision-chroot, test-boot)
+scripts/              Build helpers (prereqs, prep seed, provision-chroot, lint)
 tests/                bats end-to-end test suite
 docs/                 Long-form docs (e.g. custom-provisioning.md)
 ```

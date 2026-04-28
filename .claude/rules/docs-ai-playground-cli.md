@@ -136,8 +136,8 @@ The 9p mount feature (`add-worker --mount /host/path`):
 7. **Full qemu cmdline:** `sudo cat /var/log/libvirt/qemu/<domain>.log`
    shows the literal qemu invocation libvirt generated. When the bug
    feels libvirt-specific, the standard move is to bypass libvirt
-   entirely with `scripts/test-boot.sh` and diff the two invocations.
-   See [`docs-test-boot.md`](docs-test-boot.md) for that workflow.
+   entirely and diff the two invocations. See
+   [`docs-test-boot.md`](docs-test-boot.md) for the recipe.
 
 ## Intentionally out of scope
 

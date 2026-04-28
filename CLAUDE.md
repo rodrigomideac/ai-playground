@@ -42,7 +42,8 @@ or edited.
   (`add-worker`/`ssh-worker`/`shutdown-worker`/`list-workers`), the
   non-obvious virt-install traps (`--machine pc`, `--video vga`, vCPU
   topology), and the `/var/lib/libvirt/images` permission setup.
-- [`docs-test-boot.md`](.claude/rules/docs-test-boot.md) —
-  `scripts/test-boot.sh`: libvirt-bypass single-VM smoke boot used to
-  disambiguate image bugs from libvirt/CLI bugs, and as the diff
-  baseline for libvirt-specific qemu issues.
+- [`docs-test-boot.md`](.claude/rules/docs-test-boot.md) — Libvirt-
+  bypass smoke-boot recipe (raw qemu + SLIRP) auto-loaded when editing
+  `base-iso/packer/template.pkr.hcl`. Used to disambiguate image bugs
+  from libvirt/CLI bugs, and as the diff baseline for libvirt-specific
+  qemu issues.
