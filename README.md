@@ -2,21 +2,22 @@
 
 Have you wanted reproducible VMs to run agent workloads?
 
-A local KVM/libvirt worker pool for running coding agents in disposable Debian 13 VMs.
-
-`ai-playground` is a Go CLI that manages a pool of throwaway worker VMs cloned from a custom-built Debian 13 golden qcow2 image. Each worker gets a DHCP-assigned IP on libvirt's default network, runs cloud-init at first boot for per-VM personalization (user, SSH key, optional shared folder), and tears down to nothing when you're done.
+This repo contains a CLI tool that can be used to spin up KVM/libvirt VMs, all preconfigured with tools that you decide.
 
 The golden image ships with Docker, oh-my-zsh, neovim, and qemu-guest-agent by default. Add anything else via the [provisioning hooks](#customization).
 
 ## Why VMs and not containers
 
-Coding agents that run unsupervised are productive but risky — they can `rm -rf /`, exfiltrate secrets, or open network listeners by accident. Containers reduce that risk; full VMs go further:
+There is plethora of tools providing sandbox environments, but I wanted something that allowed me to:
+- Run agents with their own docker stack, since several projects that I use rely on `docker-compose.yaml` to spin up local stack;
+- Not worry too much if the sandboxing is secure enough.
 
+Basically, I wanted a reproducible development environment. Some benefits of using VMs:
 - Full kernel isolation from the host
-- Only the project folder is shared (and only when you ask, via virtio-9p)
+- Only the project folder is shared (and only when you ask)
 - VM-escape CVEs exist but are narrower than container-escape ones
 
-This is a personal/local-first tool, not a hardened multi-tenant sandbox.
+This is a personal/local-first tool, use it at your own risk!
 
 ## Quick start
 
