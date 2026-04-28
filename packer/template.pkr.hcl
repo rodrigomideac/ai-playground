@@ -67,6 +67,11 @@ source "qemu" "debian13" {
   headless       = true
   net_device     = "virtio-net"
   disk_interface = "virtio"
+  # Pin the machine type explicitly so the invariant lives in code, not
+  # docs. The CLI passes `--machine pc` to virt-install (see
+  # internal/worker/manager.go); these must stay in lockstep — q35
+  # boots GRUB but the kernel never starts on this image.
+  machine_type   = "pc"
 
   # Pass the host's CPU model through to the guest. qemu's default CPU model
   # omits AVX, and Claude Code (shipped as a Bun binary) requires AVX and

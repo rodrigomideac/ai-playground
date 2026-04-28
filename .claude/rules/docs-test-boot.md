@@ -97,10 +97,11 @@ rm /tmp/golden-smoke/disk.qcow2
 
 ## Lockstep with the Packer template
 
-This template builds the golden image with machine type `pc` (Packer
-qemu-builder default) and `-cpu host`. If either ever changes here,
-the recipe's qemu line must move with it — otherwise the recipe will
-appear to fail on a perfectly healthy image. Same invariant noted in
+The Packer template pins `machine_type = "pc"` (i440fx + SeaBIOS) and
+`-cpu host` (in `qemuargs`). The recipe above uses the same two
+values; if either changes in the template, the recipe's qemu line
+must move with it — otherwise the recipe will appear to fail on a
+perfectly healthy image. Same invariant on the CLI side is noted in
 [`docs-ai-playground-cli.md`](docs-ai-playground-cli.md).
 
 ## Limitations

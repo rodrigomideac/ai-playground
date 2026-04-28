@@ -152,8 +152,10 @@ The 9p mount feature (`add-worker --mount /host/path`):
 
 ## When changes here require touching the Packer template
 
-`packer/template.pkr.hcl` builds the golden image with
-machine type `pc` (Packer qemu default) + `-cpu host`. If you ever
-change the build to a different machine type or CPU model, the CLI's
-`--machine` and `--cpu` flags must move in lockstep — that's the
-invariant the GRUB loop teaches.
+`packer/template.pkr.hcl` pins **`machine_type = "pc"`** (i440fx +
+SeaBIOS) and **`-cpu host`** (in `qemuargs`). The CLI mirrors those
+exactly in `internal/worker/manager.go`'s virt-install args:
+**`--machine pc`** and **`--cpu host-passthrough`** (libvirt's name
+for qemu's `-cpu host`). If you change either in the Packer template,
+the CLI must move in lockstep — the GRUB-loop debugging encoded in
+this rule's "non-obvious traps" section will return otherwise.
