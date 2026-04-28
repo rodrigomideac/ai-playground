@@ -1,7 +1,11 @@
 #!/bin/bash
 # provision-chroot.sh
-# Copies chroot overlay contents into the VM filesystem preserving paths,
-# then fixes ownership for any files landing under /home/*/.
+# Copies chroot overlay contents into the VM filesystem preserving paths.
+# Everything in the overlay lands as root-owned; that's correct because the
+# overlay should target system-wide locations (/etc/skel for per-user files,
+# /etc, /usr/local, etc.). Files in /etc/skel are copied by `useradd -m` into
+# new users' homes with the right ownership at user-creation time, which is
+# how cloud-init creates the sandbox user on first boot.
 
 set -euo pipefail
 
@@ -18,30 +22,11 @@ if [ ! -d "$SOURCE_DIR" ]; then
   exit 0
 fi
 
-# Check if source directory is empty
 if [ -z "$(ls -A "$SOURCE_DIR" 2>/dev/null)" ]; then
   echo "[provision-chroot] WARNING: Source directory '$SOURCE_DIR' is empty. Nothing to do."
   exit 0
 fi
 
 echo "[provision-chroot] Syncing overlay from '$SOURCE_DIR' to '/' ..."
-sudo rsync --archive --verbose "$SOURCE_DIR/" /
-echo "[provision-chroot] Sync complete."
-
-# Fix ownership for home directories
-if [ -d "$SOURCE_DIR/home" ]; then
-  for user_dir in "$SOURCE_DIR"/home/*/; do
-    username="$(basename "$user_dir")"
-
-    if ! id "$username" &>/dev/null; then
-      echo "[provision-chroot] WARNING: User '$username' does not exist on this system. Skipping ownership fix for /home/$username."
-      continue
-    fi
-
-    echo "[provision-chroot] Fixing ownership for /home/$username ..."
-    sudo chown -R "$username:$username" "/home/$username"
-    echo "[provision-chroot] Ownership fixed for /home/$username."
-  done
-fi
-
+sudo rsync --archive --verbose --chown=root:root "$SOURCE_DIR/" /
 echo "[provision-chroot] Done."
