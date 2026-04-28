@@ -1,31 +1,22 @@
 # ai-playground
 
-A local KVM/libvirt worker pool for running coding agents in disposable
-Debian 13 VMs.
+Have you wanted reproducible VMs to run agent workloads?
 
-`ai-playground` is a Go CLI that manages a pool of throwaway worker VMs
-cloned from a custom-built Debian 13 golden qcow2 image. Each worker
-gets a DHCP-assigned IP on libvirt's default network, runs cloud-init
-at first boot for per-VM personalization (user, SSH key, optional
-shared folder), and tears down to nothing when you're done.
+A local KVM/libvirt worker pool for running coding agents in disposable Debian 13 VMs.
 
-The golden image ships with Docker, oh-my-zsh, neovim, and
-qemu-guest-agent by default. Add anything else via the [provisioning
-hooks](#customization).
+`ai-playground` is a Go CLI that manages a pool of throwaway worker VMs cloned from a custom-built Debian 13 golden qcow2 image. Each worker gets a DHCP-assigned IP on libvirt's default network, runs cloud-init at first boot for per-VM personalization (user, SSH key, optional shared folder), and tears down to nothing when you're done.
+
+The golden image ships with Docker, oh-my-zsh, neovim, and qemu-guest-agent by default. Add anything else via the [provisioning hooks](#customization).
 
 ## Why VMs and not containers
 
-Coding agents that run unsupervised are productive but risky — they can
-`rm -rf /`, exfiltrate secrets, or open network listeners by accident.
-Containers reduce that risk; full VMs go further:
+Coding agents that run unsupervised are productive but risky — they can `rm -rf /`, exfiltrate secrets, or open network listeners by accident. Containers reduce that risk; full VMs go further:
 
 - Full kernel isolation from the host
-- Only the project folder is shared (and only when you ask, via
-  virtio-9p)
+- Only the project folder is shared (and only when you ask, via virtio-9p)
 - VM-escape CVEs exist but are narrower than container-escape ones
 
-This is a personal/local-first tool, not a hardened multi-tenant
-sandbox.
+This is a personal/local-first tool, not a hardened multi-tenant sandbox.
 
 ## Quick start
 
@@ -77,8 +68,7 @@ sudo chgrp libvirt /var/lib/libvirt/images
 sudo chmod g+rwxs  /var/lib/libvirt/images
 ```
 
-(The setgid bit makes new files inherit the `libvirt` group, which
-plays nicely with libvirt's `dynamic_ownership`.)
+(The setgid bit makes new files inherit the `libvirt` group, which plays nicely with libvirt's `dynamic_ownership`.)
 
 ### Build
 
@@ -107,8 +97,7 @@ ai-playground shutdown-worker my-task
 
 `add-worker` accepts:
 
-- `--mount /host/path` — share a host directory inside the worker at
-  `/home/vm/project` via virtio-9p
+- `--mount /host/path` — share a host directory inside the worker at `/home/vm/project` via virtio-9p
 - `--memory MiB` (default 4096), `--cpus N` (default 2) — sizing
 - `--no-wait` — return without waiting for the new worker's IP
 
@@ -118,9 +107,7 @@ ai-playground shutdown-worker my-task
 make test   # bats tests/ — ~3-5 minutes including worker spawns
 ```
 
-The suite verifies host prerequisites, the CLI's CRUD path, golden
-image content (vm user, no debian user, /home/vm/.claude overlay,
-docker daemon, etc.), and multi-worker pool semantics.
+The suite verifies host prerequisites, the CLI's CRUD path, golden image content (vm user, no debian user, /home/vm/.claude overlay, docker daemon, etc.), and multi-worker pool semantics.
 
 ## Project layout
 
@@ -139,8 +126,7 @@ tests/                bats end-to-end test suite
 
 ## Customization
 
-Drop scripts into `packer/custom-provision/` to extend or
-override provisioning steps. By default:
+Drop scripts into `packer/custom-provision/` to extend or override provisioning steps. By default:
 
 | Prefix | Script | What it does |
 |--------|--------|--------------|
@@ -149,9 +135,4 @@ override provisioning steps. By default:
 | `20` | `claude-code.sh` | Claude Code CLI |
 | `30` | `docker.sh` | Docker, rootless setup |
 
-Same numeric prefix replaces the default. To add a step at position 25
-between Claude Code and Docker, drop `custom-provision/25-my-tools.sh`.
-To skip Docker, drop `custom-provision/30-skip.sh` containing only
-`echo "skipping"`. Full reference (override rule, naming convention,
-script-writing rules, debugging tips) is in
-[`.claude/rules/docs-provisioning-hooks.md`](.claude/rules/docs-provisioning-hooks.md).
+Same numeric prefix replaces the default. To add a step at position 25 between Claude Code and Docker, drop `custom-provision/25-my-tools.sh`. To skip Docker, drop `custom-provision/30-skip.sh` containing only `echo "skipping"`. Full reference (override rule, naming convention, script-writing rules, debugging tips) is in [`.claude/rules/docs-provisioning-hooks.md`](.claude/rules/docs-provisioning-hooks.md).
