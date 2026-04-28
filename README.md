@@ -125,7 +125,7 @@ docker daemon, etc.), and multi-worker pool semantics.
 ## Project layout
 
 ```
-base-iso/packer/      Packer template (qemu builder, cloud-image input)
+packer/      Packer template (qemu builder, cloud-image input)
   default-provision/    Numbered provisioning scripts run during build
   seed/                 Build-only NoCloud seed (gitignored runtime files)
 chroot/etc/skel/      Files copied into each worker's home at user creation
@@ -138,7 +138,7 @@ docs/                 Long-form docs (e.g. custom-provisioning.md)
 
 ## Customization
 
-Drop scripts into `base-iso/packer/custom-provision/` to extend or
+Drop scripts into `packer/custom-provision/` to extend or
 override provisioning steps. By default:
 
 | Prefix | Script | What it does |

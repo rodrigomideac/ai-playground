@@ -140,12 +140,12 @@ build {
 
   # Apply chroot overlay
   provisioner "file" {
-    source      = "${path.root}/../../chroot"
+    source      = "${path.root}/../chroot"
     destination = "/tmp"
   }
 
   provisioner "file" {
-    source      = "${path.root}/../../scripts/provision-chroot.sh"
+    source      = "${path.root}/../scripts/provision-chroot.sh"
     destination = "/tmp/provision-chroot.sh"
   }
 

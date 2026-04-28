@@ -5,7 +5,7 @@ agents in per-task ephemeral VMs with their own DHCP-assigned IPs on
 the libvirt default network.
 
 The image is built by Packer's qemu builder from the Debian
-generic-cloud qcow2 (snapshot pinned in `base-iso/packer/template.pkr.hcl`).
+generic-cloud qcow2 (snapshot pinned in `packer/template.pkr.hcl`).
 Per-VM personalization at first boot is delivered by cloud-init via a
 NoCloud seed ISO that the CLI builds per worker.
 
@@ -18,13 +18,13 @@ worker's home with the correct ownership.
 
 The build targets Debian 13 amd64 only. Bumping to a different
 snapshot requires updating `debian_snapshot_dir` and
-`debian_image_filename` in `base-iso/packer/template.pkr.hcl`.
+`debian_image_filename` in `packer/template.pkr.hcl`.
 
 ## Provisioning hooks
 
 Provisioning at build time is split into numbered scripts in
-`base-iso/packer/default-provision/`. Users can override or extend by
-placing scripts in `base-iso/packer/custom-provision/` (gitignored);
+`packer/default-provision/`. Users can override or extend by
+placing scripts in `packer/custom-provision/` (gitignored);
 same numeric prefix replaces the default. See
 [docs/custom-provisioning.md](docs/custom-provisioning.md) for full
 details.
@@ -44,6 +44,6 @@ or edited.
   topology), and the `/var/lib/libvirt/images` permission setup.
 - [`docs-test-boot.md`](.claude/rules/docs-test-boot.md) — Libvirt-
   bypass smoke-boot recipe (raw qemu + SLIRP) auto-loaded when editing
-  `base-iso/packer/template.pkr.hcl`. Used to disambiguate image bugs
+  `packer/template.pkr.hcl`. Used to disambiguate image bugs
   from libvirt/CLI bugs, and as the diff baseline for libvirt-specific
   qemu issues.

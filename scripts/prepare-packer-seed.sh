@@ -4,11 +4,11 @@ set -euo pipefail
 # Prepares the NoCloud seed used by the Packer qemu build.
 #
 # Generates a throwaway ed25519 keypair (reused if it already exists) and
-# renders base-iso/packer/seed/user-data from user-data.tpl by substituting
+# renders packer/seed/user-data from user-data.tpl by substituting
 # __SSH_PUBKEY__ with the public key. The private key is used only during
 # the build to SSH into the cloud image; it's never baked into the output.
 #
-# Outputs (all under base-iso/packer/seed/, all gitignored):
+# Outputs (all under packer/seed/, all gitignored):
 #   - id_ed25519       private key used as ssh_private_key_file
 #   - id_ed25519.pub   public key injected via cloud-init
 #   - user-data        rendered NoCloud user-data
@@ -17,7 +17,7 @@ set -euo pipefail
 # Called by: make build-from-base
 
 REPO_ROOT="$(git -C "$(dirname "$0")" rev-parse --show-toplevel)"
-SEED_DIR="$REPO_ROOT/base-iso/packer/seed"
+SEED_DIR="$REPO_ROOT/packer/seed"
 KEY_FILE="$SEED_DIR/id_ed25519"
 TEMPLATE="$SEED_DIR/user-data.tpl"
 OUTPUT="$SEED_DIR/user-data"

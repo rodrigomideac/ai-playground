@@ -152,7 +152,7 @@ The 9p mount feature (`add-worker --mount /host/path`):
 
 ## When changes here require touching the Packer template
 
-`base-iso/packer/template.pkr.hcl` builds the golden image with
+`packer/template.pkr.hcl` builds the golden image with
 machine type `pc` (Packer qemu default) + `-cpu host`. If you ever
 change the build to a different machine type or CPU model, the CLI's
 `--machine` and `--cpu` flags must move in lockstep — that's the

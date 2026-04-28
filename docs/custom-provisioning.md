@@ -2,12 +2,12 @@
 
 ## Overview
 
-The Packer build uses a hook-based provisioning system. Scripts in `base-iso/packer/default-provision/` are executed during the build, and users can override or extend them by placing scripts in `base-iso/packer/custom-provision/`.
+The Packer build uses a hook-based provisioning system. Scripts in `packer/default-provision/` are executed during the build, and users can override or extend them by placing scripts in `packer/custom-provision/`.
 
 ## Directory Structure
 
 ```
-base-iso/packer/
+packer/
   run-provision.sh          # Runner script (executed by Packer)
   default-provision/        # Built-in scripts (tracked in git)
     00-base-packages.sh

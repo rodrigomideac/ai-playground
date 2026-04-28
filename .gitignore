@@ -11,14 +11,14 @@ packer/output-*/
 build/
 
 # Custom provision scripts (user-specific, not tracked)
-base-iso/packer/custom-provision/*
-!base-iso/packer/custom-provision/.gitkeep
+packer/custom-provision/*
+!packer/custom-provision/.gitkeep
 .claude/worktrees/
 
 # Generated Packer seed files (build-only SSH keypair + rendered user-data)
-base-iso/packer/seed/id_ed25519
-base-iso/packer/seed/id_ed25519.pub
-base-iso/packer/seed/user-data
+packer/seed/id_ed25519
+packer/seed/id_ed25519.pub
+packer/seed/user-data
 
 # Go CLI build output
 /bin/

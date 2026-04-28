@@ -1,6 +1,6 @@
 ---
 paths:
-  - "base-iso/packer/template.pkr.hcl"
+  - "packer/template.pkr.hcl"
 ---
 
 # Libvirt-bypass smoke boot for the golden image
