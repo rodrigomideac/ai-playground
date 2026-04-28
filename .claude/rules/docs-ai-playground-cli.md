@@ -134,14 +134,10 @@ The 9p mount feature (`add-worker --mount /host/path`):
    interactive terminal. The pty is owned by `libvirt-qemu`, so sudo
    is required.
 7. **Full qemu cmdline:** `sudo cat /var/log/libvirt/qemu/<domain>.log`
-   shows the literal qemu invocation libvirt generated. Diff it
-   against the working invocation in `scripts/test-boot.sh` when in
-   doubt — that's how the `--video vga` trap was found.
-
-For boot-debugging without libvirt at all, `scripts/test-boot.sh`
-boots the golden image with the simplest possible qemu flags and
-SLIRP NAT. If the image boots there but not via the CLI, the bug is
-in our virt-install args.
+   shows the literal qemu invocation libvirt generated. When the bug
+   feels libvirt-specific, the standard move is to bypass libvirt
+   entirely with `scripts/test-boot.sh` and diff the two invocations.
+   See [`docs-test-boot.md`](docs-test-boot.md) for that workflow.
 
 ## Intentionally out of scope
 

@@ -42,3 +42,7 @@ or edited.
   (`add-worker`/`ssh-worker`/`shutdown-worker`/`list-workers`), the
   non-obvious virt-install traps (`--machine pc`, `--video vga`, vCPU
   topology), and the `/var/lib/libvirt/images` permission setup.
+- [`docs-test-boot.md`](.claude/rules/docs-test-boot.md) —
+  `scripts/test-boot.sh`: libvirt-bypass single-VM smoke boot used to
+  disambiguate image bugs from libvirt/CLI bugs, and as the diff
+  baseline for libvirt-specific qemu issues.
