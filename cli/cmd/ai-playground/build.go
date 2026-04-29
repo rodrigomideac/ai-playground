@@ -18,6 +18,7 @@ import (
 	"github.com/rodrigomideac/ai-playground/internal/promptio"
 	"github.com/rodrigomideac/ai-playground/internal/repo"
 	"github.com/rodrigomideac/ai-playground/internal/seed"
+	"github.com/rodrigomideac/ai-playground/internal/ui"
 )
 
 var buildCmd = &cobra.Command{
@@ -77,31 +78,40 @@ func runPackerBuild(ctx context.Context, out io.Writer) error {
 		return fmt.Errorf("internal error: build invoked without loaded config")
 	}
 
+	doneVal := ui.Step("Validating config and provision scripts")
 	if err := validateProvisionScripts(p, cfg); err != nil {
 		return err
 	}
+	doneVal("vm_user=%s, %d provision script(s)", cfg.VMUser, len(cfg.Provision.Include))
 
+	doneDoc := ui.Step("Running cheap doctor checks")
 	if probs := doctor.Run(ctx, true); len(probs) > 0 {
 		doctor.PrintProblems(out, probs)
 		return fmt.Errorf("doctor checks failed")
 	}
+	doneDoc("All cheap host checks passed")
 
+	doneSrc := ui.Step("Resolving repo source for drift check")
 	src, err := repo.Resolve(ctx, repoOverride(), p.RepoCache)
 	if err != nil {
-		// Drift detection is best-effort — if the cache can't be refreshed
-		// (e.g. offline), continue rather than blocking the build.
-		fmt.Fprintf(out, "warning: skipping upstream-drift check (%v)\n", err)
+		ui.Warn("Skipping drift check: %v", err)
 	} else {
+		doneSrc(sourceLabel(src))
 		if drift, err := buildflow.Detect(src, cfg); err == nil {
 			printDriftNotice(out, drift)
 		}
 	}
 
-	if err := buildflow.PopulateSeedTemplates(p, src); err != nil {
-		// Best-effort — only fails if templates aren't readable.
-		fmt.Fprintf(out, "warning: could not refresh seed templates: %v\n", err)
+	if src != nil {
+		doneSeed := ui.Step("Refreshing seed templates")
+		if err := buildflow.PopulateSeedTemplates(p, src); err != nil {
+			ui.Warn("Could not refresh seed templates: %v", err)
+		} else {
+			doneSeed(p.SeedDir)
+		}
 	}
 
+	doneKey := ui.Step("Preparing build seed")
 	if err := seed.EnsureKeypair(ctx, p.SeedDir); err != nil {
 		return err
 	}
@@ -112,24 +122,33 @@ func runPackerBuild(ctx context.Context, out io.Writer) error {
 	if err := seed.RenderUserData(p.SeedDir, tplPath); err != nil {
 		return err
 	}
+	doneKey("Keypair + user-data ready")
 
 	if err := os.MkdirAll(p.PackerDir, 0o755); err != nil {
 		return err
 	}
 
+	doneInit := ui.Step("Running 'packer init'")
 	if err := runPacker(ctx, out, p, "init", "template.pkr.hcl"); err != nil {
 		return fmt.Errorf("packer init: %w", err)
 	}
+	doneInit("")
+
+	doneBuild := ui.Step("Running 'packer build' — Debian boot, provisioners, sysprep (~5 min cold cache)")
 	if err := runPacker(ctx, out, p, "build",
 		"-var", "seed_dir="+p.SeedDir,
 		"template.pkr.hcl"); err != nil {
 		return fmt.Errorf("packer build: %w", err)
 	}
+	doneBuild("")
 
+	doneMove := ui.Step("Installing golden image")
 	if err := moveGolden(p); err != nil {
 		return err
 	}
-	fmt.Fprintf(out, "\nGolden image ready: %s\n", p.GoldenImage)
+	doneMove(p.GoldenImage)
+
+	ui.Success("Golden image ready at %s", p.GoldenImage)
 	return nil
 }
 
@@ -193,21 +212,24 @@ func copyGolden(src, dst string) error {
 	return os.Rename(tmp, dst)
 }
 
-func printDriftNotice(out io.Writer, d *buildflow.Drift) {
+func printDriftNotice(_ io.Writer, d *buildflow.Drift) {
 	if len(d.NewUpstream) > 0 {
-		fmt.Fprintf(out, "%d new default-provision script(s) are available upstream:\n", len(d.NewUpstream))
+		var lines []string
 		for _, name := range d.NewUpstream {
-			fmt.Fprintf(out, "  - %s\n", name)
+			lines = append(lines, "- "+name)
 		}
-		fmt.Fprintln(out, "Add their filenames to provision.include in config.yaml to opt in.")
-		fmt.Fprintln(out)
+		lines = append(lines, "Add their filenames to provision.include in config.yaml to opt in.")
+		ui.Notice(fmt.Sprintf("%d new default-provision script(s) available upstream", len(d.NewUpstream)), lines)
 	}
 	if len(d.RemovedUpstream) > 0 {
-		fmt.Fprintf(out, "%d script(s) listed in provision.include are no longer in the upstream repo (your local copies will still run):\n", len(d.RemovedUpstream))
+		var lines []string
 		for _, name := range d.RemovedUpstream {
-			fmt.Fprintf(out, "  - %s\n", name)
+			lines = append(lines, "- "+name)
 		}
-		fmt.Fprintln(out)
+		ui.Notice(
+			fmt.Sprintf("%d script(s) in provision.include no longer exist upstream (your local copies still run)", len(d.RemovedUpstream)),
+			lines,
+		)
 	}
 }
 

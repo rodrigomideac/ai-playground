@@ -14,6 +14,8 @@ import (
 	"strings"
 	"syscall"
 	"time"
+
+	"github.com/rodrigomideac/ai-playground/internal/ui"
 )
 
 // Problem is a single failed check, ready to print as a punch-list entry.
@@ -75,19 +77,21 @@ func Run(ctx context.Context, cheapOnly bool) []Problem {
 	return problems
 }
 
-// PrintProblems writes a punch list to w. Returns the number of problems.
+// PrintProblems writes a colored punch list to w.
 func PrintProblems(w io.Writer, problems []Problem) {
 	if len(problems) == 0 {
 		return
 	}
-	fmt.Fprintf(w, "doctor: %d issue(s) need to be fixed before continuing:\n\n", len(problems))
+	fmt.Fprintf(w, "\n%s %s\n",
+		ui.Red("✗"),
+		ui.Bold(fmt.Sprintf("doctor: %d issue(s) need to be fixed before continuing:", len(problems))))
 	for _, p := range problems {
-		fmt.Fprintf(w, "  - %s\n", p.Summary)
+		fmt.Fprintf(w, "  %s %s\n", ui.Red("-"), p.Summary)
 		for _, line := range strings.Split(strings.TrimRight(p.Hint, "\n"), "\n") {
 			if line == "" {
 				continue
 			}
-			fmt.Fprintf(w, "      %s\n", line)
+			fmt.Fprintf(w, "      %s\n", ui.Dim(line))
 		}
 	}
 }

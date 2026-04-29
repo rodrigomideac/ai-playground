@@ -12,6 +12,8 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+
+	"github.com/rodrigomideac/ai-playground/internal/ui"
 )
 
 // EnsureKeypair creates id_ed25519/id_ed25519.pub under seedDir if absent.
@@ -22,10 +24,12 @@ func EnsureKeypair(ctx context.Context, seedDir string) error {
 	}
 	keyPath := filepath.Join(seedDir, "id_ed25519")
 	if _, err := os.Stat(keyPath); err == nil {
+		ui.Detail("Build keypair already present at %s", keyPath)
 		return nil
 	} else if !errors.Is(err, os.ErrNotExist) {
 		return fmt.Errorf("stat %s: %w", keyPath, err)
 	}
+	ui.Detail("Generating ed25519 keypair at %s", keyPath)
 	cmd := exec.CommandContext(ctx, "ssh-keygen",
 		"-t", "ed25519",
 		"-N", "",
@@ -58,6 +62,7 @@ func RenderUserData(seedDir, templatePath string) error {
 	if err := os.WriteFile(out, []byte(rendered), 0o644); err != nil {
 		return fmt.Errorf("write %s: %w", out, err)
 	}
+	ui.Detail("Rendered %s", out)
 	return nil
 }
 

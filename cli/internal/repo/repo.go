@@ -10,6 +10,8 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+
+	"github.com/rodrigomideac/ai-playground/internal/ui"
 )
 
 // CloneURL is the upstream repository the cache mirrors.
@@ -84,11 +86,11 @@ func validateLayout(s *Source) error {
 func ensureCache(ctx context.Context, cachePath string) error {
 	gitDir := filepath.Join(cachePath, ".git")
 	if _, err := os.Stat(gitDir); err == nil {
-		fmt.Fprintf(os.Stderr, "Updating repo cache at %s...\n", cachePath)
+		ui.Detail("Updating cache at %s (git fetch + reset --hard origin/master)", cachePath)
 		if err := runStreamed(ctx, "git", "-C", cachePath, "fetch", "--quiet", "origin", "master"); err != nil {
 			return fmt.Errorf("git fetch in %s: %w", cachePath, err)
 		}
-		if err := runStreamed(ctx, "git", "-C", cachePath, "reset", "--hard", "origin/master"); err != nil {
+		if err := runStreamed(ctx, "git", "-C", cachePath, "reset", "--quiet", "--hard", "origin/master"); err != nil {
 			return fmt.Errorf("git reset in %s: %w", cachePath, err)
 		}
 		return nil
@@ -96,7 +98,7 @@ func ensureCache(ctx context.Context, cachePath string) error {
 	if err := os.MkdirAll(filepath.Dir(cachePath), 0o755); err != nil {
 		return fmt.Errorf("create parent dir for cache: %w", err)
 	}
-	fmt.Fprintf(os.Stderr, "Cloning %s into %s...\n", CloneURL, cachePath)
+	ui.Detail("Cloning %s → %s", CloneURL, cachePath)
 	if err := runStreamed(ctx, "git", "clone", "--quiet", CloneURL, cachePath); err != nil {
 		return fmt.Errorf("git clone %s: %w", CloneURL, err)
 	}

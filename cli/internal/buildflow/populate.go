@@ -16,6 +16,7 @@ import (
 	"github.com/rodrigomideac/ai-playground/internal/config"
 	"github.com/rodrigomideac/ai-playground/internal/paths"
 	"github.com/rodrigomideac/ai-playground/internal/repo"
+	"github.com/rodrigomideac/ai-playground/internal/ui"
 )
 
 // Populate copies the template, runner, chroot/, and the selected provision
@@ -44,6 +45,7 @@ func Populate(p *paths.Paths, src *repo.Source, cfg *config.Config, accepted []s
 	if err := os.Chmod(p.RunProvision, 0o755); err != nil {
 		return fmt.Errorf("chmod runner: %w", err)
 	}
+	ui.Detail("Copied template.pkr.hcl + run-provision.sh")
 
 	for _, name := range accepted {
 		srcPath := filepath.Join(src.ProvisionDir(), name)
@@ -58,13 +60,17 @@ func Populate(p *paths.Paths, src *repo.Source, cfg *config.Config, accepted []s
 			return fmt.Errorf("chmod %s: %w", dst, err)
 		}
 	}
+	ui.Detail("Copied %d provision script(s) into provision/", len(accepted))
 
 	if err := copyTree(src.Chroot(), p.ChrootDir, policy); err != nil {
 		return fmt.Errorf("copy chroot/: %w", err)
 	}
+	ui.Detail("Copied chroot/ overlay")
+
 	if err := PopulateSeedTemplates(p, src); err != nil {
 		return err
 	}
+	ui.Detail("Refreshed seed templates in %s", p.SeedDir)
 	return nil
 }
 

@@ -19,6 +19,7 @@ import (
 	"github.com/rodrigomideac/ai-playground/internal/paths"
 	"github.com/rodrigomideac/ai-playground/internal/promptio"
 	"github.com/rodrigomideac/ai-playground/internal/repo"
+	"github.com/rodrigomideac/ai-playground/internal/ui"
 )
 
 var initCmd = &cobra.Command{
@@ -57,10 +58,14 @@ func runInit(ctx context.Context, out io.Writer) error {
 	case !configPresent && buildPresent:
 		return fmt.Errorf("inconsistent state — run 'ai-playground reset'")
 	case configPresent && buildPresent:
-		fmt.Fprintln(out, "already initialized — edit config.yaml or run 'ai-playground reset'")
+		ui.Detail("Already initialized — edit %s or run 'ai-playground reset'", p.Config)
 		return nil
 	case configPresent && !buildPresent:
-		return runHeadlessPopulate(ctx, out, cliCtx.Cfg)
+		if err := runHeadlessPopulate(ctx, out, cliCtx.Cfg); err != nil {
+			return err
+		}
+		ui.Success("Build inputs ready. Run 'ai-playground build' to produce the golden image.")
+		return nil
 	default: // !configPresent && !buildPresent
 		return runHandholding(ctx, out)
 	}
@@ -68,26 +73,45 @@ func runInit(ctx context.Context, out io.Writer) error {
 
 // requireSupportedDistro errors out on non-arch/debian/fedora hosts.
 func requireSupportedDistro(out io.Writer) error {
+	done := ui.Step("Detecting Linux distribution")
 	d, raw, err := paths.DetectDistro()
 	if err != nil {
 		return err
 	}
 	if d == paths.DistroUnknown {
+		ui.Fail("Detected unsupported distro: %s", raw)
 		return fmt.Errorf("ai-playground supports Arch/Debian/Fedora families; detected: %s", raw)
 	}
+	done("Detected %s family (%s)", d, raw)
 	return nil
 }
 
+// runHeadlessPopulate is the shared "config present, build/ missing" path.
+// Called from `init` (where it's the final step) and from `build` (where it
+// preceeds the actual Packer run). The caller decides what success message
+// to print after.
 func runHeadlessPopulate(ctx context.Context, out io.Writer, cfg *config.Config) error {
+	doneSrc := ui.Step("Resolving repo source")
 	src, err := repo.Resolve(ctx, repoOverride(), cliCtx.Paths.RepoCache)
 	if err != nil {
 		return err
 	}
+	doneSrc(sourceLabel(src))
+
+	donePop := ui.Step("Populating %s from repo source", cliCtx.Paths.BuildDir)
 	if err := buildflow.Populate(cliCtx.Paths, src, cfg, cfg.Provision.Include); err != nil {
 		return err
 	}
-	fmt.Fprintf(out, "Populated %s from %s.\n", cliCtx.Paths.BuildDir, src.Path)
+	donePop("")
 	return nil
+}
+
+// sourceLabel renders a human-friendly description of the repo source.
+func sourceLabel(src *repo.Source) string {
+	if src.IsOverride {
+		return fmt.Sprintf("Using override at %s", src.Path)
+	}
+	return fmt.Sprintf("Cached at %s", src.Path)
 }
 
 func runHandholding(ctx context.Context, out io.Writer) error {
@@ -95,23 +119,30 @@ func runHandholding(ctx context.Context, out io.Writer) error {
 		return fmt.Errorf("init requires an interactive terminal. Pre-populate config.yaml and run 'ai-playground build' for headless setup.")
 	}
 
+	ui.Banner("ai-playground first-time setup")
+
+	doneSrc := ui.Step("Resolving repo source")
 	src, err := repo.Resolve(ctx, repoOverride(), cliCtx.Paths.RepoCache)
 	if err != nil {
 		return err
 	}
+	doneSrc(sourceLabel(src))
 
+	doneDoc := ui.Step("Running doctor checks")
 	if probs := doctor.Run(ctx, false); len(probs) > 0 {
 		doctor.PrintProblems(out, probs)
 		return fmt.Errorf("doctor checks failed")
 	}
+	doneDoc("All host checks passed")
 
+	ui.Banner("Pick which provision scripts to bake into the image")
 	prompt := promptio.New()
-
 	accepted, err := perScriptApproval(prompt, src.ProvisionDir())
 	if err != nil {
 		return err
 	}
 
+	ui.Banner("Worker VM identity")
 	defaultUser := currentUsername()
 	vmUser, err := prompt.Line("Username inside each worker VM", defaultUser)
 	if err != nil {
@@ -130,16 +161,20 @@ func runHandholding(ctx context.Context, out io.Writer) error {
 		return err
 	}
 
+	donePop := ui.Step("Populating %s", cliCtx.Paths.BuildDir)
 	if err := buildflow.Populate(cliCtx.Paths, src, cfg, accepted); err != nil {
 		return err
 	}
+	donePop("")
 
+	doneCfg := ui.Step("Writing config.yaml")
 	if err := os.MkdirAll(cliCtx.Paths.ConfigDir, 0o755); err != nil {
 		return err
 	}
 	if err := config.Save(cliCtx.Paths.Config, cfg); err != nil {
 		return err
 	}
+	doneCfg(cliCtx.Paths.Config)
 	cliCtx.Cfg = cfg
 
 	printCustomizationTip(out, cliCtx.Paths)
@@ -171,11 +206,13 @@ func perScriptApproval(p *promptio.IO, provisionDir string) ([]string, error) {
 	var accepted []string
 	for _, s := range scripts {
 		prefix := numericPrefix(s.name)
-		fmt.Fprintf(p.Out, "\n  [%s] %s\n", prefix, strings.TrimPrefix(s.name, prefix+"-"))
+		fmt.Fprintf(p.Out, "\n  %s %s\n",
+			ui.Bold("["+prefix+"]"),
+			ui.Bold(strings.TrimPrefix(s.name, prefix+"-")))
 		if s.desc != "" {
-			fmt.Fprintf(p.Out, "      %s\n", s.desc)
+			fmt.Fprintf(p.Out, "      %s\n", ui.Dim(s.desc))
 		}
-		ok, err := p.YesNo("Include this in your build?", true)
+		ok, err := p.YesNo("  Include this in your build?", true)
 		if err != nil {
 			return nil, err
 		}
@@ -203,14 +240,18 @@ func currentUsername() string {
 }
 
 func printCustomizationTip(out io.Writer, p *paths.Paths) {
-	fmt.Fprintf(out, `
-Build inputs are in:
+	ui.Banner("Setup complete")
+	fmt.Fprintf(out, `Build inputs are in:
   %s
 
 Edit anything here before building. In particular:
-  - provision/         add or modify scripts that run during the build
-  - chroot/etc/skel/   files placed here land in each worker's home directory
+  %s   add or modify scripts that run during the build
+  %s   files placed here land in each worker's home directory
 
-Run 'ai-playground build' when you're ready.
-`, p.BuildDir)
+Run %s when you're ready.
+`,
+		ui.Bold(p.BuildDir),
+		ui.Bold("provision/"),
+		ui.Bold("chroot/etc/skel/"),
+		ui.Bold("'ai-playground build'"))
 }
