@@ -1,14 +1,17 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"os"
+	"time"
 
 	"github.com/spf13/cobra"
 
 	"github.com/rodrigomideac/ai-playground/internal/promptio"
 	"github.com/rodrigomideac/ai-playground/internal/ui"
+	"github.com/rodrigomideac/ai-playground/internal/worker"
 )
 
 var resetCmd = &cobra.Command{
@@ -19,8 +22,9 @@ var resetCmd = &cobra.Command{
   $XDG_CACHE_HOME/ai-playground/
   $XDG_DATA_HOME/ai-playground/
 
-Existing libvirt domains are NOT touched — use 'ai-playground shutdown-worker'
-for those. Asks for confirmation before deleting anything.`,
+If any libvirt domains exist with the configured prefix, you will be
+asked whether to destroy them (and their storage) before the directory
+wipe. Asks for confirmation before doing anything.`,
 	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return runReset(cmd.OutOrStdout())
@@ -36,8 +40,6 @@ func runReset(out io.Writer) error {
 	ui.Banner("ai-playground reset")
 	fmt.Fprintf(out, "About to remove:\n  %s\n  %s\n  %s\n\n",
 		ui.Bold(p.ConfigDir), ui.Bold(p.CacheDir), ui.Bold(p.DataDir))
-	fmt.Fprintf(out, "%s libvirt domains are not affected. Use 'ai-playground shutdown-worker' for those.\n\n",
-		ui.Yellow("!"))
 
 	prompt := promptio.New()
 	ok, err := prompt.Confirm("Type 'reset' to confirm:", "reset")
@@ -49,6 +51,10 @@ func runReset(out io.Writer) error {
 		return nil
 	}
 
+	if err := offerToDestroyDomains(out, prompt); err != nil {
+		return err
+	}
+
 	for _, dir := range []string{p.ConfigDir, p.CacheDir, p.DataDir} {
 		done := ui.Step("Removing %s", dir)
 		if err := os.RemoveAll(dir); err != nil {
@@ -57,5 +63,50 @@ func runReset(out io.Writer) error {
 		done("")
 	}
 	ui.Success("ai-playground state wiped. Run 'ai-playground build' to start over.")
+	return nil
+}
+
+// offerToDestroyDomains lists libvirt domains carrying our prefix and,
+// when any are present, asks the user whether to destroy them. Worker
+// destruction goes through virsh (no golden/pubkey needed), so it works
+// even when the rest of the config is half-broken.
+func offerToDestroyDomains(out io.Writer, prompt *promptio.IO) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	m := &worker.Manager{Prefix: globalOpts.prefix}
+	workers, err := m.List(ctx)
+	if err != nil {
+		ui.Warn("Could not enumerate libvirt domains: %v", err)
+		return nil
+	}
+	if len(workers) == 0 {
+		return nil
+	}
+
+	fmt.Fprintf(out, "\n%s Found %s libvirt domain(s) with prefix %s:\n",
+		ui.Yellow("!"),
+		ui.Bold(fmt.Sprintf("%d", len(workers))),
+		ui.Bold(globalOpts.prefix))
+	for _, w := range workers {
+		fmt.Fprintf(out, "    - %s %s\n", w.Name, ui.Dim(fmt.Sprintf("(state=%s)", w.State)))
+	}
+
+	shut, err := prompt.YesNo("Destroy these and delete their storage too?", true)
+	if err != nil {
+		return err
+	}
+	if !shut {
+		ui.Detail("Leaving libvirt domains in place. Use 'ai-playground shutdown-worker' later if needed.")
+		return nil
+	}
+	for _, w := range workers {
+		done := ui.Step("Destroying %s", w.Name)
+		if err := w.Destroy(ctx); err != nil {
+			ui.Warn("%v", err)
+			continue
+		}
+		done("")
+	}
 	return nil
 }

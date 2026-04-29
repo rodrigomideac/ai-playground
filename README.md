@@ -118,7 +118,7 @@ ai-playground shutdown-worker my-task
 ai-playground reset                 # wipe config + cache + data dirs (after confirmation)
 ```
 
-`reset` does not touch existing libvirt domains — `shutdown-worker` is for those.
+After typing `reset` to confirm, if any libvirt domains exist with the configured `--prefix` you'll be asked whether to destroy them and their storage too — answer `n` to leave them in place and use `shutdown-worker` later.
 
 ### Test
 

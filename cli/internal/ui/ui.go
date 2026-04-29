@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"regexp"
 	"strings"
 	"time"
 )
@@ -146,6 +147,69 @@ func Yellow(s string) string { return paint(boldYel, s) }
 
 // Green returns the input wrapped in bold-green escapes.
 func Green(s string) string { return paint(boldGreen, s) }
+
+// ansiRe matches ANSI SGR sequences so we can compute *visible* widths
+// for colored strings — important when laying out tables by hand.
+var ansiRe = regexp.MustCompile(`\x1b\[[0-9;]*m`)
+
+// VisibleLen returns the rendered width of s, ignoring ANSI escapes.
+// Multi-byte runes are treated as one column each, which matches the
+// only multi-byte chars we currently emit (▶/✓/✗/●/○).
+func VisibleLen(s string) int {
+	stripped := ansiRe.ReplaceAllString(s, "")
+	// Cheap approximation: count runes, not bytes.
+	n := 0
+	for range stripped {
+		n++
+	}
+	return n
+}
+
+// PadRight pads s with spaces so its visible width reaches width.
+// No-op when s is already at least width visible chars.
+func PadRight(s string, width int) string {
+	pad := width - VisibleLen(s)
+	if pad <= 0 {
+		return s
+	}
+	return s + strings.Repeat(" ", pad)
+}
+
+// Table prints a header + body table to w, aligning columns by visible
+// width so ANSI-colored cells line up correctly. Two-space gutter
+// between columns; the last column is not padded.
+func Table(w io.Writer, header []string, rows [][]string) {
+	nCols := len(header)
+	widths := make([]int, nCols)
+	for i, h := range header {
+		widths[i] = VisibleLen(h)
+	}
+	for _, r := range rows {
+		for i := 0; i < nCols && i < len(r); i++ {
+			if v := VisibleLen(r[i]); v > widths[i] {
+				widths[i] = v
+			}
+		}
+	}
+	writeRow := func(cells []string) {
+		for i, c := range cells {
+			if i == nCols-1 {
+				fmt.Fprint(w, c)
+			} else {
+				fmt.Fprint(w, PadRight(c, widths[i]), "  ")
+			}
+		}
+		fmt.Fprintln(w)
+	}
+	bolded := make([]string, nCols)
+	for i, h := range header {
+		bolded[i] = Bold(h)
+	}
+	writeRow(bolded)
+	for _, r := range rows {
+		writeRow(r)
+	}
+}
 
 // short formats a duration as a compact human-friendly string.
 func short(d time.Duration) string {
