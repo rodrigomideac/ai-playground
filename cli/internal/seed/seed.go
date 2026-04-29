@@ -29,7 +29,7 @@ func EnsureKeypair(ctx context.Context, seedDir string) error {
 	} else if !errors.Is(err, os.ErrNotExist) {
 		return fmt.Errorf("stat %s: %w", keyPath, err)
 	}
-	ui.Detail("Generating ed25519 keypair at %s", keyPath)
+	ui.Detail("Generating build SSH key at %s", keyPath)
 	cmd := exec.CommandContext(ctx, "ssh-keygen",
 		"-t", "ed25519",
 		"-N", "",

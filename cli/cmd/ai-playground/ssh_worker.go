@@ -19,8 +19,8 @@ var sshWorkerOpts struct {
 var sshWorkerCmd = &cobra.Command{
 	Use:   "ssh-worker [name] [-- ssh-args...]",
 	Short: "SSH into a worker (random running one if no name)",
-	Long: `Looks up the worker's DHCP-assigned IPv4 lease (waiting if needed)
-and execs into ssh as the configured worker user.
+	Long: `Looks up the worker's IP address (waiting if needed) and execs
+into ssh as the configured worker user.
 
 If [name] is omitted, a uniformly random *running* worker is chosen.
 

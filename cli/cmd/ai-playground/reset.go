@@ -22,8 +22,8 @@ var resetCmd = &cobra.Command{
   $XDG_CACHE_HOME/ai-playground/
   $XDG_DATA_HOME/ai-playground/
 
-If any libvirt domains exist with the configured prefix, you will be
-asked whether to destroy them (and their storage) before the directory
+If any workers exist with the configured prefix, you will be asked
+whether to stop them (and delete their disks) before the directory
 wipe. Asks for confirmation before doing anything.`,
 	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {

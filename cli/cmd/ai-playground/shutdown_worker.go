@@ -11,9 +11,9 @@ import (
 
 var shutdownWorkerCmd = &cobra.Command{
 	Use:   "shutdown-worker [name]",
-	Short: "Tear down a worker and remove it from the pool (random running one if no name)",
-	Long: `Force-stops the worker's libvirt domain and removes all of its
-storage volumes. This is destructive — the worker is gone, not just halted.
+	Short: "Stop a worker and remove it from the pool (random running one if no name)",
+	Long: `Force-stops the worker and deletes its disks. This is destructive —
+the worker is gone, not just halted.
 
 If [name] is omitted, a uniformly random *running* worker is chosen.`,
 	Args: cobra.MaximumNArgs(1),

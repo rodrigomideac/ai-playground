@@ -61,7 +61,7 @@ func printPool(out io.Writer, m *worker.Manager, ctx context.Context) error {
 			if got, err := w.IP(ctx); err == nil {
 				ip = got
 			} else {
-				ip = ui.Dim("(no lease)")
+				ip = ui.Dim("(no IP yet)")
 			}
 		default:
 			ip = ui.Dim("-")

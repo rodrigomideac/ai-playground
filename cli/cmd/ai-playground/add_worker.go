@@ -20,14 +20,14 @@ var addWorkerOpts struct {
 var addWorkerCmd = &cobra.Command{
 	Use:   "add-worker [name]",
 	Short: "Add a worker to the pool",
-	Long: `Spins up a new worker VM by linked-cloning the golden qcow2,
-seeding cloud-init for the new instance, and starting the libvirt domain.
+	Long: `Spins up a new worker VM. Creates a per-worker disk on top of the
+golden image, prepares the worker's first-boot config, and starts the VM.
 
 If [name] is omitted, a random name like "worker-3f9a17" is generated.
 
-By default, blocks until the new worker has a DHCP-assigned IP, then
-prints the full pool table. Pass --no-wait to return immediately
-(the new worker will appear in the table without an IP yet).`,
+By default, blocks until the new worker has an IP address, then prints
+the full pool table. Pass --no-wait to return immediately (the new
+worker will appear in the table without an IP yet).`,
 	Args: cobra.MaximumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if err := requireBuilt(); err != nil {

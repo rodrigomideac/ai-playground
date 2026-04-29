@@ -35,11 +35,12 @@ var cliCtx struct {
 var rootCmd = &cobra.Command{
 	Use:   "ai-playground",
 	Short: "Build a Debian golden image and manage a pool of disposable worker VMs",
-	Long: `ai-playground builds a Debian golden qcow2 image (Packer + cloud-init)
-and orchestrates a local pool of disposable worker VMs cloned from it
-via libvirt. Each worker gets a DHCP-assigned IP on libvirt's default
-network. Per-worker personalization is delivered by a NoCloud cloud-init
-seed at first boot.
+	Long: `ai-playground builds a Debian golden image (with Packer) and
+orchestrates a local pool of disposable worker VMs cloned from it.
+Each worker gets its own IP address on a virtual network shared with
+the host, plus a per-worker first-boot config that creates the
+worker user, installs your SSH key, and (optionally) mounts a host
+folder inside the VM.
 
 Lifecycle:
   init                    Interactive setup; writes config.yaml and populates build/.
@@ -68,7 +69,7 @@ func init() {
 	rootCmd.PersistentFlags().StringVar(&globalOpts.network, "network", "default",
 		"libvirt network")
 	rootCmd.PersistentFlags().StringVar(&globalOpts.prefix, "prefix", "aip",
-		"libvirt domain name prefix")
+		"Worker name prefix (used to namespace VMs on shared libvirt hosts)")
 	rootCmd.PersistentFlags().StringVar(&globalOpts.sshUser, "ssh-user", "",
 		"User created inside each worker VM (default: vm_user from config.yaml, else 'vm')")
 	rootCmd.PersistentFlags().StringVar(&globalOpts.repoPath, "repo-path", "",
