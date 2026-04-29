@@ -25,6 +25,9 @@ If [name] is omitted, a uniformly random *running* worker is chosen.
 
 Any args after '--' are forwarded to ssh.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
+		if err := requireBuilt(); err != nil {
+			return err
+		}
 		m, err := newManager()
 		if err != nil {
 			return err

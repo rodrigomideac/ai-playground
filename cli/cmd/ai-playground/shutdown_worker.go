@@ -18,6 +18,9 @@ storage volumes. This is destructive — the worker is gone, not just halted.
 If [name] is omitted, a uniformly random *running* worker is chosen.`,
 	Args: cobra.MaximumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
+		if err := requireBuilt(); err != nil {
+			return err
+		}
 		m, err := newManager()
 		if err != nil {
 			return err

@@ -18,6 +18,9 @@ var listWorkersCmd = &cobra.Command{
 	Aliases: []string{"ls"},
 	Short:   "Print the pool with each worker's state and IP",
 	RunE: func(cmd *cobra.Command, args []string) error {
+		if err := requireBuilt(); err != nil {
+			return err
+		}
 		m, err := newManager()
 		if err != nil {
 			return err

@@ -1,118 +1,105 @@
 ---
 paths:
   - "packer/run-provision.sh"
-  - "packer/default-provision/**"
-  - "packer/custom-provision/**"
+  - "packer/provision/**"
 ---
 
 # Packer provisioning hooks
 
-The Packer build runs a numbered hook chain to install packages, set
-up shells, and otherwise customize the golden image before it's
-captured. This rule covers the hook contract and how
+The Packer build runs a numbered chain of shell scripts to install
+packages, set up shells, and otherwise customize the golden image
+before it is captured. This rule covers the hook contract and how
 `packer/run-provision.sh` discovers, orders, and executes the
 scripts. Auto-loaded when editing the runner or any script under
-`packer/{default,custom}-provision/`.
+`packer/provision/`.
 
-## Directory layout
+## Directory layout (single directory)
 
 ```
 packer/
-  run-provision.sh          # runner; uploaded + executed by Packer
-  default-provision/        # built-in scripts (tracked in git)
+  run-provision.sh    # runner; uploaded + executed by Packer
+  provision/          # numbered scripts (NN-name.sh)
     00-base-packages.sh
     10-shell-config.sh
     20-claude-code.sh
     30-docker.sh
-  custom-provision/         # user scripts (gitignored except .gitkeep)
 ```
 
-`run-provision.sh` itself is uploaded into the build VM at `/tmp` by
-Packer's file provisioner; both `default-provision/` and
-`custom-provision/` are uploaded next to it. The shell provisioner
-then runs `/tmp/run-provision.sh /tmp` inside the VM.
+There is no separate "default" vs "custom" directory and no override
+mechanism. Users edit, add, or delete scripts here directly (in their
+own copy under `$XDG_CONFIG_HOME/ai-playground/build/provision/` —
+the in-repo `packer/provision/` is the *source* the CLI populates
+that copy from).
 
 ## Naming convention
 
 Every script must match `<NN>-<name>.sh`:
 
-- **`NN`**: two-digit numeric prefix that controls execution order.
-- **`name`**: descriptive, dash-separated.
-- **`.sh`**: required extension.
+- **`NN`** — two-digit numeric prefix that controls execution order.
+- **`name`** — descriptive, dash-separated.
+- **`.sh`** — required extension.
 
 Default scripts use gaps of 10 (`00`, `10`, `20`, `30`) so users can
 slot custom scripts at any position without renumbering.
 
-## Execution order and override rule
+A `# Description: ...` header comment anywhere near the top of the
+script is read by `ai-playground init`'s per-script approval prompt
+(the parser scans the file and grabs the first matching line):
 
-`run-provision.sh` does this on each run:
+```bash
+#!/bin/bash
+set -euo pipefail
 
-1. Discovers every `*.sh` in `default-provision/` and
-   `custom-provision/`.
-2. Extracts each script's numeric prefix.
-3. **If a custom script shares a prefix with a default, the custom
-   one replaces the default.** Same number = custom wins.
-4. Sorts the surviving scripts by prefix and executes in order.
-5. Bails on the first non-zero exit (`set -euo pipefail`).
+# Description: Docker engine + rootless setup
+```
 
-The runner prints an execution plan before running anything and logs
-each override decision:
+Keep the description to one line. Add it to every new script that
+ships in `packer/provision/`.
+
+## Execution
+
+`run-provision.sh PROVISION_DIR` does, on each Packer run:
+
+1. Discovers every `*.sh` in `PROVISION_DIR`.
+2. Extracts each script's numeric prefix; warns and skips files
+   without one.
+3. Sorts by prefix and executes in order.
+4. Bails on the first non-zero exit (`set -euo pipefail`).
+
+The runner prints the execution plan up-front and announces each
+script as it starts:
 
 ```
 ============================================
+ Provision Runner
+============================================
+
  Execution Plan (4 scripts)
-============================================
-  [00] /tmp/default-provision/00-base-packages.sh (default)
-  [10] /tmp/default-provision/10-shell-config.sh (default)
-  [20] /tmp/custom-provision/20-my-editor.sh (custom)
-  [30] /tmp/default-provision/30-docker.sh (default)
-```
-
-```
-[provision] OVERRIDE: 20 — replacing default (...) with custom (...)
+  [00] /tmp/provision/00-base-packages.sh
+  [10] /tmp/provision/10-shell-config.sh
+  [20] /tmp/provision/20-claude-code.sh
+  [30] /tmp/provision/30-docker.sh
 ```
 
 ## Common patterns
 
-**Insert a step between two defaults** (here at `25`, between Claude
-Code and Docker):
-
-```bash
-# packer/custom-provision/25-my-tools.sh
-#!/bin/bash
-set -euo pipefail
-sudo apt-get install -y ripgrep fd-find
-```
-
+**Insert a step between two defaults** (e.g. at `25`, between Claude
+Code and Docker): drop a `25-my-tools.sh` into the directory.
 Resulting order: `00` → `10` → `20` → `25` → `30`.
 
-**Replace a default** by reusing its prefix:
+**Replace a default**: edit it in place. There is no override layer,
+so the script you edit is the script that runs.
 
-```bash
-# packer/custom-provision/30-podman.sh
-#!/bin/bash
-set -euo pipefail
-sudo apt-get install -y podman
-```
-
-Replaces `default-provision/30-docker.sh` because both have prefix
-`30`.
-
-**Skip a default** with an empty override:
-
-```bash
-# packer/custom-provision/30-skip-docker.sh
-#!/bin/bash
-echo "Skipping Docker installation"
-```
+**Skip a default**: delete (or comment out) the script. The runner
+no longer runs scripts that aren't in the directory.
 
 ## Script writing rules
 
 - Always start with `#!/bin/bash` and `set -euo pipefail`. The runner
   doesn't isolate failures — first non-zero exit aborts the build.
 - Use `sudo` for anything needing root. Packer connects as a regular
-  user (the build-time `debian` user, which is removed at the end of
-  the build — don't bake state into `/home/debian`).
+  user (the build-time `debian` user, removed at the end of the
+  build — don't bake state into `/home/debian`).
 - Prefer `echo "==> Description"` so the build log is greppable.
 - Don't `source ~/.bashrc` — fragile in non-interactive shells.
 - Append env vars to `~/.bashrc` directly:

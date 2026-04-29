@@ -14,8 +14,30 @@
 
 REPO_ROOT="$(git -C "$(dirname "$BATS_TEST_FILENAME")" rev-parse --show-toplevel)"
 AIP_BIN="$REPO_ROOT/cli/bin/ai-playground"
-GOLDEN_IMAGE="$REPO_ROOT/build/packer-ai-playground-base/ai-playground-base"
+GOLDEN_IMAGE="${XDG_DATA_HOME:-$HOME/.local/share}/ai-playground/golden/ai-playground-base.qcow2"
 TEST_PREFIX="aiptest"
+
+# Tests run with an isolated XDG_CONFIG_HOME so they don't depend on (or
+# clobber) the user's real config.yaml. We pre-place a minimal config so
+# the daily commands' "config.yaml + golden image required" precondition
+# is satisfied; the actual golden image is consumed from the user's real
+# $XDG_DATA_HOME/ai-playground/golden/ (built by `ai-playground build`).
+_aip_test_setup_config() {
+    local cfg_root cfg_dir cfg_file
+    cfg_root="$(mktemp -d -t aiptest-config-XXXXXX)"
+    cfg_dir="$cfg_root/ai-playground"
+    cfg_file="$cfg_dir/config.yaml"
+    mkdir -p "$cfg_dir"
+    cat > "$cfg_file" <<'EOF'
+vm_user: vm
+provision:
+  include: []
+on_conflict: keep
+EOF
+    export XDG_CONFIG_HOME="$cfg_root"
+}
+
+_aip_test_setup_config
 
 # aip wraps ai-playground with the test-scoped prefix. Use this in tests
 # instead of calling $AIP_BIN directly so list-workers, shutdown-worker, etc.

@@ -1,6 +1,8 @@
 #!/bin/bash
 set -euo pipefail
 
+# Description: oh-my-zsh + bashrc tweaks (color prompt, COLORTERM=truecolor, EDITOR=nvim)
+
 echo "==> Installing oh-my-zsh"
 RUNZSH=no CHSH=no sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)"
 

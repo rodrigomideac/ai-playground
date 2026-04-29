@@ -30,6 +30,9 @@ prints the full pool table. Pass --no-wait to return immediately
 (the new worker will appear in the table without an IP yet).`,
 	Args: cobra.MaximumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
+		if err := requireBuilt(); err != nil {
+			return err
+		}
 		var name string
 		if len(args) == 1 {
 			name = args[0]

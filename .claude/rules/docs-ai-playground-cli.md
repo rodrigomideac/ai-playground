@@ -6,16 +6,29 @@ paths:
 
 # `ai-playground` Go CLI — worker pool orchestration
 
-`ai-playground` is the Go binary in `cli/cmd/ai-playground/` that manages a
-local pool of Debian *worker* VMs cloned from the golden qcow2 image
-(built by `make build-from-base`). It shells out to `virsh`,
-`virt-install`, `qemu-img`, and `xorriso`; libvirt is the source of
-truth for state. Use this rule when changing the public command
-surface or the virt-install argument list — the non-obvious traps
-below were learned from the GRUB-loop debugging session and must not
-be regressed.
+`ai-playground` is the Go binary in `cli/cmd/ai-playground/` that manages
+the build of the Debian golden qcow2 image and a local pool of *worker*
+VMs cloned from it via libvirt. It shells out to `git`, `packer`,
+`virsh`, `virt-install`, `qemu-img`, `xorriso`, and `ssh-keygen`;
+libvirt is the source of truth for runtime state, and
+`$XDG_CONFIG_HOME/ai-playground/config.yaml` is the source of truth for
+the build spec. Use this rule when changing the public command surface
+or the virt-install argument list — the non-obvious traps below were
+learned from the GRUB-loop debugging session and must not be regressed.
+For the build/init state machine, doctor checks, and Packer-template
+contract, see [`docs-ai-playground-build.md`](docs-ai-playground-build.md).
 
-## Public surface (intentionally narrow)
+## Public surface
+
+Lifecycle commands:
+
+```
+ai-playground init                    # interactive setup; writes config.yaml + populates build/
+ai-playground build                   # unified entrypoint: setup-if-needed + Packer build
+ai-playground reset                   # wipe config + cache + data dirs (with confirmation)
+```
+
+Daily worker-pool commands:
 
 ```
 ai-playground add-worker [name]       # spin up a worker, print the pool
@@ -24,14 +37,24 @@ ai-playground shutdown-worker [name]  # tear down one (random running one if no 
 ai-playground list-workers            # print the pool
 ```
 
-The `[name]`-optional commands fall back to a uniformly random
-*running* worker via `Manager.Random(ctx)`. Auto-generated names look
-like `worker-3f9a17`. Names that come from users are validated against
+The daily commands fast-fail with `run 'ai-playground build' first` if
+either `config.yaml` or the resolved `--golden` qcow2 is missing. They
+never re-run doctor, re-clone the repo, or re-prompt anything.
+
+The `[name]`-optional commands fall back to a uniformly random *running*
+worker via `Manager.Random(ctx)`. Auto-generated names look like
+`worker-3f9a17`. Names that come from users are validated against
 `[a-z0-9][a-z0-9-]{0,29}` (`cli/internal/worker/name.go`).
 
 Persistent flags (every subcommand): `--ssh-pubkey`, `--golden`,
-`--pool`, `--network`, `--prefix`, `--ssh-user`. Defaults work for
-the standard layout; document them in `--help`.
+`--pool`, `--network`, `--prefix`, `--ssh-user`, `--repo-path`.
+- `--golden` defaults to `$XDG_DATA_HOME/ai-playground/golden/ai-playground-base.qcow2`.
+- `--ssh-user` defaults to `vm_user` from `config.yaml` if it exists,
+  else `vm`.
+- `--repo-path` overrides the public-repo cache used by `init` and
+  `build` for source files. The env var `AI_PLAYGROUND_REPO` is the
+  same lever for use across a shell session; the flag wins when both
+  are set.
 
 ## Architecture in two paragraphs
 
