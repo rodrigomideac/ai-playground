@@ -36,7 +36,7 @@ func (w *Worker) IP(ctx context.Context) (string, error) {
 			return ip, nil
 		}
 	}
-	return "", fmt.Errorf("no IPv4 lease yet for %s", w.DomainName)
+	return "", fmt.Errorf("no IP address yet for %s", w.DomainName)
 }
 
 // IPWait polls IP() until it succeeds or timeout elapses.
@@ -48,7 +48,7 @@ func (w *Worker) IPWait(ctx context.Context, timeout time.Duration) (string, err
 			return ip, nil
 		}
 		if time.Now().After(deadline) {
-			return "", fmt.Errorf("timed out waiting for DHCP lease: %w", err)
+			return "", fmt.Errorf("timed out waiting for IP address: %w", err)
 		}
 		select {
 		case <-ctx.Done():
@@ -64,7 +64,7 @@ func (w *Worker) Destroy(ctx context.Context) error {
 	_ = runQuiet(ctx, "virsh", "-c", "qemu:///system", "destroy", w.DomainName)
 	if err := runMuted(ctx, "virsh", "-c", "qemu:///system",
 		"undefine", "--remove-all-storage", w.DomainName); err != nil {
-		return fmt.Errorf("undefine domain: %w", err)
+		return fmt.Errorf("remove worker: %w", err)
 	}
 	return nil
 }

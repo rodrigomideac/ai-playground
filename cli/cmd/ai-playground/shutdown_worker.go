@@ -40,7 +40,7 @@ If [name] is omitted, a uniformly random *running* worker is chosen.`,
 		}
 		doneLookup("%s (state=%s)", w.Name, w.State)
 
-		doneDestroy := ui.Step("Destroying domain and removing storage volumes")
+		doneDestroy := ui.Step("Stopping worker and deleting its disks")
 		if err := w.Destroy(ctx); err != nil {
 			return err
 		}

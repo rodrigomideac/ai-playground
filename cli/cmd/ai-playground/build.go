@@ -91,10 +91,10 @@ func runPackerBuild(ctx context.Context, out io.Writer) error {
 	}
 	doneDoc("All cheap host checks passed")
 
-	doneSrc := ui.Step("Resolving repo source for drift check")
+	doneSrc := ui.Step("Checking for upstream changes")
 	src, err := repo.Resolve(ctx, repoOverride(), p.RepoCache)
 	if err != nil {
-		ui.Warn("Skipping drift check: %v", err)
+		ui.Warn("Skipping upstream-changes check: %v", err)
 	} else {
 		doneSrc(sourceLabel(src))
 		if drift, err := buildflow.Detect(src, cfg); err == nil {
@@ -103,38 +103,38 @@ func runPackerBuild(ctx context.Context, out io.Writer) error {
 	}
 
 	if src != nil {
-		doneSeed := ui.Step("Refreshing seed templates")
+		doneSeed := ui.Step("Refreshing first-boot config templates")
 		if err := buildflow.PopulateSeedTemplates(p, src); err != nil {
-			ui.Warn("Could not refresh seed templates: %v", err)
+			ui.Warn("Could not refresh first-boot config templates: %v", err)
 		} else {
 			doneSeed(p.SeedDir)
 		}
 	}
 
-	doneKey := ui.Step("Preparing build seed")
+	doneKey := ui.Step("Preparing build credentials")
 	if err := seed.EnsureKeypair(ctx, p.SeedDir); err != nil {
 		return err
 	}
 	tplPath := filepath.Join(p.SeedDir, "user-data.tpl")
 	if _, err := os.Stat(tplPath); err != nil {
-		return fmt.Errorf("seed template missing at %s — try 'ai-playground init'", tplPath)
+		return fmt.Errorf("first-boot config template missing at %s — try 'ai-playground init'", tplPath)
 	}
 	if err := seed.RenderUserData(p.SeedDir, tplPath); err != nil {
 		return err
 	}
-	doneKey("Keypair + user-data ready")
+	doneKey("Build SSH key + first-boot config ready")
 
 	if err := os.MkdirAll(p.PackerDir, 0o755); err != nil {
 		return err
 	}
 
-	doneInit := ui.Step("Running 'packer init'")
+	doneInit := ui.Step("Preparing Packer")
 	if err := runPacker(ctx, out, p, "init", "template.pkr.hcl"); err != nil {
 		return fmt.Errorf("packer init: %w", err)
 	}
 	doneInit("")
 
-	doneBuild := ui.Step("Running 'packer build' — Debian boot, provisioners, sysprep (~5 min cold cache)")
+	doneBuild := ui.Step("Building golden image — boots Debian, runs setup scripts, cleans up (~5 min on first run)")
 	if err := runPacker(ctx, out, p, "build",
 		"-var", "seed_dir="+p.SeedDir,
 		"template.pkr.hcl"); err != nil {
@@ -219,7 +219,7 @@ func printDriftNotice(_ io.Writer, d *buildflow.Drift) {
 			lines = append(lines, "- "+name)
 		}
 		lines = append(lines, "Add their filenames to provision.include in config.yaml to opt in.")
-		ui.Notice(fmt.Sprintf("%d new default-provision script(s) available upstream", len(d.NewUpstream)), lines)
+		ui.Notice(fmt.Sprintf("%d new setup script(s) available in the upstream repo", len(d.NewUpstream)), lines)
 	}
 	if len(d.RemovedUpstream) > 0 {
 		var lines []string
@@ -227,7 +227,7 @@ func printDriftNotice(_ io.Writer, d *buildflow.Drift) {
 			lines = append(lines, "- "+name)
 		}
 		ui.Notice(
-			fmt.Sprintf("%d script(s) in provision.include no longer exist upstream (your local copies still run)", len(d.RemovedUpstream)),
+			fmt.Sprintf("%d setup script(s) in provision.include no longer exist upstream (your local copies still run)", len(d.RemovedUpstream)),
 			lines,
 		)
 	}

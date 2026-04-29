@@ -135,7 +135,7 @@ func runHandholding(ctx context.Context, out io.Writer) error {
 	}
 	doneDoc("All host checks passed")
 
-	ui.Banner("Pick which provision scripts to bake into the image")
+	ui.Banner("Pick which setup scripts to include in the image")
 	prompt := promptio.New()
 	accepted, err := perScriptApproval(prompt, src.ProvisionDir())
 	if err != nil {
@@ -245,7 +245,7 @@ func printCustomizationTip(out io.Writer, p *paths.Paths) {
   %s
 
 Edit anything here before building. In particular:
-  %s   add or modify scripts that run during the build
+  %s   add or edit setup scripts that run during the build
   %s   files placed here land in each worker's home directory
 
 Run %s when you're ready.

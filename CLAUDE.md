@@ -56,3 +56,9 @@ or edited.
   — Single-directory provision-script chain (`packer/run-provision.sh`
   + `packer/provision/`): naming convention, `# Description:` header
   used by the `init` per-script approval, and script-writing rules.
+- [`docs-cli-language.md`](.claude/rules/docs-cli-language.md) — Two
+  audiences, two registers: plain-language for end-user surfaces
+  (init/build/add-worker/etc.) and maximally-precise libvirt/qemu
+  terminology for the doctor's verbose output and agent-targeted
+  diagnostics. Vocabulary table + the `doctor.Check` Layer/Verifies/
+  Inspect contract.

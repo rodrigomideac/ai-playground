@@ -77,14 +77,14 @@ func offerToDestroyDomains(out io.Writer, prompt *promptio.IO) error {
 	m := &worker.Manager{Prefix: globalOpts.prefix}
 	workers, err := m.List(ctx)
 	if err != nil {
-		ui.Warn("Could not enumerate libvirt domains: %v", err)
+		ui.Warn("Could not list workers: %v", err)
 		return nil
 	}
 	if len(workers) == 0 {
 		return nil
 	}
 
-	fmt.Fprintf(out, "\n%s Found %s libvirt domain(s) with prefix %s:\n",
+	fmt.Fprintf(out, "\n%s Found %s worker(s) with prefix %s:\n",
 		ui.Yellow("!"),
 		ui.Bold(fmt.Sprintf("%d", len(workers))),
 		ui.Bold(globalOpts.prefix))
@@ -92,16 +92,16 @@ func offerToDestroyDomains(out io.Writer, prompt *promptio.IO) error {
 		fmt.Fprintf(out, "    - %s %s\n", w.Name, ui.Dim(fmt.Sprintf("(state=%s)", w.State)))
 	}
 
-	shut, err := prompt.YesNo("Destroy these and delete their storage too?", true)
+	shut, err := prompt.YesNo("Stop these workers and delete their disks too?", true)
 	if err != nil {
 		return err
 	}
 	if !shut {
-		ui.Detail("Leaving libvirt domains in place. Use 'ai-playground shutdown-worker' later if needed.")
+		ui.Detail("Leaving workers in place. Use 'ai-playground shutdown-worker' later if needed.")
 		return nil
 	}
 	for _, w := range workers {
-		done := ui.Step("Destroying %s", w.Name)
+		done := ui.Step("Stopping %s", w.Name)
 		if err := w.Destroy(ctx); err != nil {
 			ui.Warn("%v", err)
 			continue

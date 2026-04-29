@@ -64,12 +64,12 @@ func (m *Manager) Create(ctx context.Context, name string, opts CreateOptions) (
 	if exists, err := m.domainExists(ctx, domain); err != nil {
 		return nil, err
 	} else if exists {
-		return nil, fmt.Errorf("libvirt domain %q already exists", domain)
+		return nil, fmt.Errorf("a worker named %q already exists", name)
 	}
 
 	poolPath, err := m.poolPath(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("resolve pool path: %w", err)
+		return nil, fmt.Errorf("resolve VM disk directory: %w", err)
 	}
 
 	w := &Worker{
@@ -80,27 +80,27 @@ func (m *Manager) Create(ctx context.Context, name string, opts CreateOptions) (
 	}
 
 	// 1. Linked-clone overlay (instant, kilobytes)
-	ui.Detail("Cloning golden image overlay → %s", w.DiskPath)
+	ui.Detail("Creating VM disk → %s", w.DiskPath)
 	if err := runMuted(ctx, "qemu-img", "create",
 		"-f", "qcow2", "-F", "qcow2",
 		"-b", m.GoldenImage,
 		w.DiskPath); err != nil {
-		return nil, fmt.Errorf("create overlay: %w", err)
+		return nil, fmt.Errorf("create VM disk: %w", err)
 	}
 
 	// 2. NoCloud seed ISO with this worker's identity + ssh key
-	ui.Detail("Building NoCloud seed ISO → %s", w.SeedPath)
+	ui.Detail("Writing first-boot config → %s", w.SeedPath)
 	hostMount := opts.HostMount != ""
 	if err := BuildSeedISO(ctx, w.SeedPath, name, m.SSHUser, m.SSHPubKey, hostMount); err != nil {
 		_ = os.Remove(w.DiskPath)
-		return nil, fmt.Errorf("build seed iso: %w", err)
+		return nil, fmt.Errorf("write first-boot config: %w", err)
 	}
 
 	// 3. Refresh the pool so libvirt sees the new files
 	_ = runQuiet(ctx, "virsh", "-c", "qemu:///system", "pool-refresh", m.Pool)
 
 	// 4. Define + start the domain
-	ui.Detail("Defining libvirt domain %s", domain)
+	ui.Detail("Registering and starting VM %s", domain)
 	args := []string{
 		"--connect", "qemu:///system",
 		"--name", domain,
@@ -236,7 +236,7 @@ func (m *Manager) poolPath(ctx context.Context) (string, error) {
 	}
 	match := poolPathRegex.FindStringSubmatch(string(out))
 	if len(match) < 2 {
-		return "", fmt.Errorf("pool %q has no <path> in dumpxml", m.Pool)
+		return "", fmt.Errorf("could not read disk path from libvirt storage pool %q", m.Pool)
 	}
 	return strings.TrimSpace(match[1]), nil
 }

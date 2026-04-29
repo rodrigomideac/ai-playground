@@ -48,7 +48,11 @@ Lifecycle:
   ssh-worker [name]       SSH into a worker (random running one if no name).
   shutdown-worker [name]  Tear down a worker (random running one if no name).
   list-workers            Print the pool.
-  reset                   Wipe config + cache + data dirs (with confirmation).`,
+  reset                   Wipe config + cache + data dirs (with confirmation).
+
+Diagnostic:
+  doctor                  Verbose KVM/qemu/libvirt stack check, grouped by
+                          layer with manual-inspection commands per check.`,
 	SilenceUsage:      true,
 	SilenceErrors:     true,
 	PersistentPreRunE: persistentPreRun,

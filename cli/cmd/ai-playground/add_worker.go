@@ -57,10 +57,10 @@ prints the full pool table. Pass --no-wait to return immediately
 		if err != nil {
 			return err
 		}
-		doneCreate("Worker %s defined", w.Name)
+		doneCreate("Worker %s ready", w.Name)
 
 		if !addWorkerOpts.noWait {
-			doneIP := ui.Step("Waiting for DHCP lease (timeout %s)", addWorkerOpts.wait)
+			doneIP := ui.Step("Waiting for IP address (timeout %s)", addWorkerOpts.wait)
 			ip, err := w.IPWait(ctx, addWorkerOpts.wait)
 			if err != nil {
 				ui.Warn("%v", err)

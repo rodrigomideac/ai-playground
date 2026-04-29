@@ -70,7 +70,7 @@ Any args after '--' are forwarded to ssh.`,
 		}
 		doneLookup("%s (state=%s)", w.Name, w.State)
 
-		doneIP := ui.Step("Waiting for DHCP lease (timeout %s)", sshWorkerOpts.wait)
+		doneIP := ui.Step("Waiting for IP address (timeout %s)", sshWorkerOpts.wait)
 		ip, err := w.IPWait(ctx, sshWorkerOpts.wait)
 		if err != nil {
 			return err
@@ -96,6 +96,6 @@ Any args after '--' are forwarded to ssh.`,
 
 func init() {
 	sshWorkerCmd.Flags().DurationVar(&sshWorkerOpts.wait, "wait", 60*time.Second,
-		"How long to wait for the DHCP lease before giving up")
+		"How long to wait for the worker's IP address before giving up")
 	rootCmd.AddCommand(sshWorkerCmd)
 }

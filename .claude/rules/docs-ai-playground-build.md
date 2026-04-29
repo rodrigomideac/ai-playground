@@ -81,6 +81,14 @@ missing path produces a specific error naming what's absent.
 without the libvirt group. Doctor never runs `sudo` or any
 destructive command — failures print the punch list and exit non-zero.
 
+The standalone `ai-playground doctor` subcommand prints a verbose
+diagnostic of the same set: stack-layer headings, the Verifies field
+explaining what each check actually asserts in precise libvirt/qemu
+terminology, and an Inspect command line for manual verification.
+That output is the right starting point when handing a broken host
+to a coding agent. See [`docs-cli-language.md`](docs-cli-language.md)
+for the precision-first register the doctor follows.
+
 Full set:
 
 - **Required commands present:** `git`, `curl`, `qemu-system-x86_64`,
