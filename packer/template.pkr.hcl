@@ -41,12 +41,17 @@ variable "vm_name" {
 
 # Directory containing the build-only SSH keypair and rendered user-data
 # (id_ed25519, id_ed25519.pub, user-data, meta-data). The CLI passes
-# -var seed_dir=$XDG_CACHE_HOME/ai-playground/seed at build time. The
-# default keeps the in-repo workflow working when running packer by hand.
+# -var seed_dir=$XDG_CACHE_HOME/ai-playground/seed at build time. When
+# unset, falls back to ${path.root}/seed so running `packer build` by
+# hand from the in-repo packer/ dir still works.
+#
+# The default cannot itself reference ${path.root} (Packer HCL2 forbids
+# expressions in variable defaults), so the fallback lives in the
+# `seed_dir` local below.
 variable "seed_dir" {
   type        = string
-  default     = "${path.root}/seed"
-  description = "Directory holding the build-only NoCloud seed (keypair + user-data + meta-data)"
+  default     = ""
+  description = "Directory holding the build-only NoCloud seed (keypair + user-data + meta-data); when empty, falls back to <template-dir>/seed"
 }
 
 # Pinned Debian cloud image snapshot. Bump snapshot_dir and image_filename
@@ -64,6 +69,7 @@ variable "debian_image_filename" {
 
 locals {
   output_dir          = var.artifact_dir
+  seed_dir            = var.seed_dir != "" ? var.seed_dir : "${path.root}/seed"
   debian_snapshot_url = "https://cloud.debian.org/images/cloud/trixie/${var.debian_snapshot_dir}"
   debian_image_url    = "${local.debian_snapshot_url}/${var.debian_image_filename}"
   debian_checksum_url = "file:${local.debian_snapshot_url}/SHA512SUMS"
@@ -104,8 +110,8 @@ source "qemu" "debian13" {
 
   # NoCloud seed ISO — cloud-init reads the build-only SSH pubkey from here
   cd_files = [
-    "${var.seed_dir}/user-data",
-    "${var.seed_dir}/meta-data",
+    "${local.seed_dir}/user-data",
+    "${local.seed_dir}/meta-data",
   ]
   cd_label = "cidata"
 
@@ -113,7 +119,7 @@ source "qemu" "debian13" {
   # build command (or, for in-repo dev, manually placed in seed/).
   communicator           = "ssh"
   ssh_username           = "debian"
-  ssh_private_key_file   = "${var.seed_dir}/id_ed25519"
+  ssh_private_key_file   = "${local.seed_dir}/id_ed25519"
   ssh_timeout            = "10m"
   ssh_handshake_attempts = 100
 
