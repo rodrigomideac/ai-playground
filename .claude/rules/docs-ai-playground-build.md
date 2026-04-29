@@ -57,6 +57,28 @@ Both `init` and `build` dispatch on what's already on disk:
 `build` is idempotent: re-running it after editing a script under
 `build/provision/` rebuilds the golden image with the change.
 
+## Pre-build worker check
+
+Each worker's per-VM disk is a qcow2 overlay whose backing-file path
+resolves to the golden image. Once `build` overwrites that file, every
+still-defined worker (running or shut off) becomes inconsistent —
+qemu would read new-golden bytes through old COW chains, corrupting
+reads. To keep the pool consistent, `build` enumerates workers carrying
+`--prefix` after the cheap doctor pass and:
+
+- **TTY**: prompts "Stop all of them and delete their disks before
+  building? [Y/n]". `y` destroys each via `Worker.Destroy` (same path
+  as `shutdown-worker`); `n` aborts the build with a clear error.
+- **Non-TTY** (CI, piped stdin): refuses with a pointer to
+  `ai-playground shutdown-worker`. The user is expected to clean up
+  workers before invoking headless builds.
+
+This check happens *after* the cheap doctor pass (an unhealthy host
+fails fast before we touch worker state) and *before* repo
+resolution / Packer setup (so the build aborts before any expensive
+work). Other-prefix workers are left alone — they don't share our
+golden image.
+
 ## Repo source resolution (`internal/repo`)
 
 `init` and `build` need the public repo's `packer/` and `chroot/`

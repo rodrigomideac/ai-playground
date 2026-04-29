@@ -19,6 +19,7 @@ import (
 	"github.com/rodrigomideac/ai-playground/internal/repo"
 	"github.com/rodrigomideac/ai-playground/internal/seed"
 	"github.com/rodrigomideac/ai-playground/internal/ui"
+	"github.com/rodrigomideac/ai-playground/internal/worker"
 )
 
 var buildCmd = &cobra.Command{
@@ -91,6 +92,10 @@ func runPackerBuild(ctx context.Context, out io.Writer) error {
 	}
 	doneDoc("All cheap host checks passed")
 
+	if err := ensureNoConflictingWorkers(ctx, out); err != nil {
+		return err
+	}
+
 	doneSrc := ui.Step("Checking for upstream changes")
 	src, err := repo.Resolve(ctx, repoOverride(), p.RepoCache)
 	if err != nil {
@@ -134,6 +139,12 @@ func runPackerBuild(ctx context.Context, out io.Writer) error {
 	}
 	doneInit("")
 
+	// Packer's qemu builder refuses to start when its output_directory
+	// already exists — leftover from a previous successful build (we move
+	// the produced qcow2 out of it but the parent directory remains).
+	priorOutput := filepath.Join(p.PackerDir, "packer-ai-playground-base")
+	_ = os.RemoveAll(priorOutput)
+
 	doneBuild := ui.Step("Building golden image — boots Debian, runs setup scripts, cleans up (~5 min on first run)")
 	if err := runPacker(ctx, out, p, "build",
 		"-var", "seed_dir="+p.SeedDir,
@@ -149,6 +160,63 @@ func runPackerBuild(ctx context.Context, out io.Writer) error {
 	doneMove(p.GoldenImage)
 
 	ui.Success("Golden image ready at %s", p.GoldenImage)
+	return nil
+}
+
+// ensureNoConflictingWorkers refuses to rebuild while existing workers
+// reference the current golden image as their backing file. Each worker's
+// per-VM disk is a qcow2 overlay whose backing-file path resolves to the
+// golden image; once Packer overwrites that file, every still-defined
+// worker (running or shut off) becomes inconsistent — qemu would read
+// new-golden bytes through old COW chains. Worker disks must be deleted
+// before the rebuild.
+//
+// In an interactive shell we offer to stop them; in non-TTY contexts we
+// refuse with a pointer to shutdown-worker. This check fires after the
+// cheap doctor pass (so an unhealthy host fails fast before we touch
+// worker state).
+func ensureNoConflictingWorkers(ctx context.Context, out io.Writer) error {
+	m := &worker.Manager{Prefix: globalOpts.prefix}
+	workers, err := m.List(ctx)
+	if err != nil {
+		return fmt.Errorf("could not list existing workers: %w", err)
+	}
+	if len(workers) == 0 {
+		return nil
+	}
+
+	fmt.Fprintf(out, "\n%s Found %s existing worker(s) with prefix %s:\n",
+		ui.Yellow("!"),
+		ui.Bold(fmt.Sprintf("%d", len(workers))),
+		ui.Bold(globalOpts.prefix))
+	for _, w := range workers {
+		fmt.Fprintf(out, "    - %s %s\n", w.Name, ui.Dim(fmt.Sprintf("(state=%s)", w.State)))
+	}
+	fmt.Fprintf(out, "\nEach worker's disk is a copy-on-write overlay backed by the golden image.\n"+
+		"Rebuilding will replace that golden image, leaving these worker disks pointing at\n"+
+		"a different file than the one they were created from. To keep the pool consistent,\n"+
+		"all workers must be stopped before rebuilding.\n\n")
+
+	if !promptio.IsTTY() {
+		return fmt.Errorf("refusing to build with %d existing worker(s); run 'ai-playground shutdown-worker' for each first, or run 'ai-playground build' interactively to stop them all", len(workers))
+	}
+
+	prompt := promptio.New()
+	ok, err := prompt.YesNo("Stop all of them and delete their disks before building?", true)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return fmt.Errorf("aborting build to keep existing workers consistent with the current golden image")
+	}
+
+	for _, w := range workers {
+		done := ui.Step("Stopping %s", w.Name)
+		if err := w.Destroy(ctx); err != nil {
+			return fmt.Errorf("stop worker %s: %w", w.Name, err)
+		}
+		done("")
+	}
 	return nil
 }
 

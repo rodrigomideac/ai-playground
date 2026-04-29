@@ -92,7 +92,7 @@ ai-playground build
 4. Writes `$XDG_CONFIG_HOME/ai-playground/config.yaml` and seeds `$XDG_CONFIG_HOME/ai-playground/build/` with the template, runner, scripts, and `chroot/` overlay.
 5. Generates a build-only ed25519 keypair under `$XDG_CACHE_HOME/ai-playground/seed/`, runs Packer, and writes the result to `$XDG_DATA_HOME/ai-playground/golden/ai-playground-base.qcow2` (~3-5 minutes).
 
-Re-running `ai-playground build` after editing a script under `$XDG_CONFIG_HOME/ai-playground/build/provision/` rebuilds the golden image with the change. There is also a standalone `ai-playground init` that does steps 1-4 only — useful if you want to edit `build/` before starting the (~5 minute) Packer run.
+Re-running `ai-playground build` after editing a script under `$XDG_CONFIG_HOME/ai-playground/build/provision/` rebuilds the golden image with the change. If you have any workers still defined when you re-run `build`, you'll be asked to stop them first — each worker's disk is a copy-on-write overlay backed by the current golden image, and rebuilding would leave that chain pointing at a different file. There is also a standalone `ai-playground init` that does steps 1-4 only — useful if you want to edit `build/` before starting the (~5 minute) Packer run.
 
 ### Use
 

@@ -8,6 +8,8 @@ import (
 	"io"
 	"os"
 	"strings"
+
+	"golang.org/x/term"
 )
 
 // IO bundles a reader for the user's input and a writer for prompts.
@@ -21,13 +23,12 @@ func New() *IO {
 	return &IO{In: bufio.NewReader(os.Stdin), Out: os.Stdout}
 }
 
-// IsTTY reports whether stdin is an interactive terminal.
+// IsTTY reports whether stdin is an interactive terminal. The naive
+// "stat the fd and check os.ModeCharDevice" approach misclassifies
+// /dev/null as a TTY (it's a character device too); the correct test
+// is the TCGETS ioctl, which is what term.IsTerminal performs.
 func IsTTY() bool {
-	fi, err := os.Stdin.Stat()
-	if err != nil {
-		return false
-	}
-	return (fi.Mode() & os.ModeCharDevice) != 0
+	return term.IsTerminal(int(os.Stdin.Fd()))
 }
 
 // YesNo asks question with [Y/n] semantics. Empty input → defaultYes.
