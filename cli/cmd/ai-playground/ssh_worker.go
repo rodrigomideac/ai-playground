@@ -8,6 +8,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/rodrigomideac/ai-playground/internal/ui"
 	"github.com/rodrigomideac/ai-playground/internal/worker"
 )
 
@@ -55,6 +56,7 @@ Any args after '--' are forwarded to ssh.`,
 		}
 
 		var w *worker.Worker
+		doneLookup := ui.Step("Selecting worker")
 		if name != "" {
 			w, err = m.Get(ctx, name)
 		} else {
@@ -66,10 +68,15 @@ Any args after '--' are forwarded to ssh.`,
 		if w.State != "" && w.State != "running" {
 			return fmt.Errorf("worker %s is %q, not running", w.Name, w.State)
 		}
+		doneLookup("%s (state=%s)", w.Name, w.State)
+
+		doneIP := ui.Step("Waiting for DHCP lease (timeout %s)", sshWorkerOpts.wait)
 		ip, err := w.IPWait(ctx, sshWorkerOpts.wait)
 		if err != nil {
 			return err
 		}
+		doneIP("Got %s", ip)
+
 		fullArgs := []string{
 			"-o", "StrictHostKeyChecking=no",
 			"-o", "UserKnownHostsFile=/dev/null",
@@ -82,7 +89,7 @@ Any args after '--' are forwarded to ssh.`,
 		if err != nil {
 			return fmt.Errorf("ssh not found in PATH: %w", err)
 		}
-		fmt.Fprintf(cmd.ErrOrStderr(), "Connecting to %s (%s)...\n", w.Name, ip)
+		ui.Detail("Connecting as %s@%s ...", globalOpts.sshUser, ip)
 		return execve(bin, append([]string{"ssh"}, fullArgs...), os.Environ())
 	},
 }

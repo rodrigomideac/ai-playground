@@ -1,11 +1,11 @@
 package main
 
 import (
-	"fmt"
 	"time"
 
 	"github.com/spf13/cobra"
 
+	"github.com/rodrigomideac/ai-playground/internal/ui"
 	"github.com/rodrigomideac/ai-playground/internal/worker"
 )
 
@@ -43,6 +43,12 @@ prints the full pool table. Pass --no-wait to return immediately
 		}
 		ctx, cancel := contextWithTimeout(cmd.Context(), 5*time.Minute)
 		defer cancel()
+
+		displayName := name
+		if displayName == "" {
+			displayName = "<auto-named>"
+		}
+		doneCreate := ui.Step("Provisioning worker %s", displayName)
 		w, err := m.Create(ctx, name, worker.CreateOptions{
 			Memory:    int(addWorkerOpts.memory),
 			CPUs:      int(addWorkerOpts.cpus),
@@ -51,12 +57,19 @@ prints the full pool table. Pass --no-wait to return immediately
 		if err != nil {
 			return err
 		}
-		fmt.Fprintf(cmd.OutOrStdout(), "Added worker %s\n\n", w.Name)
+		doneCreate("Worker %s defined", w.Name)
+
 		if !addWorkerOpts.noWait {
-			if _, err := w.IPWait(ctx, addWorkerOpts.wait); err != nil {
-				fmt.Fprintf(cmd.ErrOrStderr(), "warning: %v\n\n", err)
+			doneIP := ui.Step("Waiting for DHCP lease (timeout %s)", addWorkerOpts.wait)
+			ip, err := w.IPWait(ctx, addWorkerOpts.wait)
+			if err != nil {
+				ui.Warn("%v", err)
+			} else {
+				doneIP("Got %s", ip)
 			}
 		}
+
+		ui.Banner("Pool")
 		return printPool(cmd.OutOrStdout(), m, ctx)
 	},
 }

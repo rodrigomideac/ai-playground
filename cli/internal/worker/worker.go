@@ -62,7 +62,7 @@ func (w *Worker) IPWait(ctx context.Context, timeout time.Duration) (string, err
 // along with its storage volumes. Used by `shutdown-worker`.
 func (w *Worker) Destroy(ctx context.Context) error {
 	_ = runQuiet(ctx, "virsh", "-c", "qemu:///system", "destroy", w.DomainName)
-	if err := run(ctx, "virsh", "-c", "qemu:///system",
+	if err := runMuted(ctx, "virsh", "-c", "qemu:///system",
 		"undefine", "--remove-all-storage", w.DomainName); err != nil {
 		return fmt.Errorf("undefine domain: %w", err)
 	}

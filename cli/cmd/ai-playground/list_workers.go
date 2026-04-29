@@ -10,6 +10,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/rodrigomideac/ai-playground/internal/ui"
 	"github.com/rodrigomideac/ai-playground/internal/worker"
 )
 
@@ -45,7 +46,7 @@ func printPool(out io.Writer, m *worker.Manager, ctx context.Context) error {
 		return err
 	}
 	if len(workers) == 0 {
-		fmt.Fprintln(out, "(no workers)")
+		fmt.Fprintln(out, ui.Dim("(no workers)"))
 		return nil
 	}
 	sort.Slice(workers, func(i, j int) bool { return workers[i].Name < workers[j].Name })

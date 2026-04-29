@@ -1,11 +1,11 @@
 package main
 
 import (
-	"fmt"
 	"time"
 
 	"github.com/spf13/cobra"
 
+	"github.com/rodrigomideac/ai-playground/internal/ui"
 	"github.com/rodrigomideac/ai-playground/internal/worker"
 )
 
@@ -29,6 +29,7 @@ If [name] is omitted, a uniformly random *running* worker is chosen.`,
 		defer cancel()
 
 		var w *worker.Worker
+		doneLookup := ui.Step("Selecting worker to shut down")
 		if len(args) == 1 {
 			w, err = m.Get(ctx, args[0])
 		} else {
@@ -37,11 +38,15 @@ If [name] is omitted, a uniformly random *running* worker is chosen.`,
 		if err != nil {
 			return err
 		}
-		fmt.Fprintf(cmd.OutOrStdout(), "Shutting down %s...\n", w.Name)
+		doneLookup("%s (state=%s)", w.Name, w.State)
+
+		doneDestroy := ui.Step("Destroying domain and removing storage volumes")
 		if err := w.Destroy(ctx); err != nil {
 			return err
 		}
-		fmt.Fprintln(cmd.OutOrStdout())
+		doneDestroy("")
+
+		ui.Banner("Pool")
 		return printPool(cmd.OutOrStdout(), m, ctx)
 	},
 }

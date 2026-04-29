@@ -17,7 +17,7 @@ teardown_file() {
 @test "add-worker creates a worker that appears in list-workers" {
     run aip add-worker lifecycle1 --no-wait
     [ "$status" -eq 0 ]
-    echo "$output" | grep -q 'Added worker lifecycle1'
+    echo "$output" | grep -q 'Worker lifecycle1 defined'
 
     run aip list-workers
     [ "$status" -eq 0 ]

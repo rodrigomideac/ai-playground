@@ -9,6 +9,8 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+
+	"github.com/rodrigomideac/ai-playground/internal/ui"
 )
 
 // Manager creates and looks up workers. Construct one per CLI invocation;
@@ -78,7 +80,8 @@ func (m *Manager) Create(ctx context.Context, name string, opts CreateOptions) (
 	}
 
 	// 1. Linked-clone overlay (instant, kilobytes)
-	if err := run(ctx, "qemu-img", "create",
+	ui.Detail("Cloning golden image overlay → %s", w.DiskPath)
+	if err := runMuted(ctx, "qemu-img", "create",
 		"-f", "qcow2", "-F", "qcow2",
 		"-b", m.GoldenImage,
 		w.DiskPath); err != nil {
@@ -86,6 +89,7 @@ func (m *Manager) Create(ctx context.Context, name string, opts CreateOptions) (
 	}
 
 	// 2. NoCloud seed ISO with this worker's identity + ssh key
+	ui.Detail("Building NoCloud seed ISO → %s", w.SeedPath)
 	hostMount := opts.HostMount != ""
 	if err := BuildSeedISO(ctx, w.SeedPath, name, m.SSHUser, m.SSHPubKey, hostMount); err != nil {
 		_ = os.Remove(w.DiskPath)
@@ -96,6 +100,7 @@ func (m *Manager) Create(ctx context.Context, name string, opts CreateOptions) (
 	_ = runQuiet(ctx, "virsh", "-c", "qemu:///system", "pool-refresh", m.Pool)
 
 	// 4. Define + start the domain
+	ui.Detail("Defining libvirt domain %s", domain)
 	args := []string{
 		"--connect", "qemu:///system",
 		"--name", domain,
@@ -129,7 +134,7 @@ func (m *Manager) Create(ctx context.Context, name string, opts CreateOptions) (
 		args = append(args, "--filesystem",
 			fmt.Sprintf("type=mount,source=%s,target=hostshare,accessmode=passthrough", abs))
 	}
-	if err := run(ctx, "virt-install", args...); err != nil {
+	if err := runMuted(ctx, "virt-install", args...); err != nil {
 		_ = os.Remove(w.DiskPath)
 		_ = os.Remove(w.SeedPath)
 		return nil, fmt.Errorf("virt-install: %w", err)
