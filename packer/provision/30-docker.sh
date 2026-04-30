@@ -1,6 +1,8 @@
 #!/bin/bash
 set -euo pipefail
 
+# Description: Docker engine + rootless setup, DOCKER_HOST set to the per-user socket
+
 echo "==> Installing Docker"
 curl -fsSL https://get.docker.com -o /tmp/get-docker.sh
 sudo sh /tmp/get-docker.sh

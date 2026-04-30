@@ -3,11 +3,15 @@ package main
 import (
 	"fmt"
 	"os"
+
+	"github.com/rodrigomideac/ai-playground/cli/internal/ui"
 )
 
 func main() {
 	if err := rootCmd.Execute(); err != nil {
-		fmt.Fprintln(os.Stderr, "error:", err)
+		if _, silent := err.(*silentError); !silent {
+			fmt.Fprintf(os.Stderr, "%s %s\n", ui.Red("✗"), err)
+		}
 		os.Exit(1)
 	}
 }

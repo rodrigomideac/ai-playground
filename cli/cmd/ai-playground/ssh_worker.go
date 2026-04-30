@@ -8,7 +8,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/rodrigomideac/ai-playground/internal/worker"
+	"github.com/rodrigomideac/ai-playground/cli/internal/ui"
+	"github.com/rodrigomideac/ai-playground/cli/internal/worker"
 )
 
 var sshWorkerOpts struct {
@@ -18,13 +19,16 @@ var sshWorkerOpts struct {
 var sshWorkerCmd = &cobra.Command{
 	Use:   "ssh-worker [name] [-- ssh-args...]",
 	Short: "SSH into a worker (random running one if no name)",
-	Long: `Looks up the worker's DHCP-assigned IPv4 lease (waiting if needed)
-and execs into ssh as the configured worker user.
+	Long: `Looks up the worker's IP address (waiting if needed) and execs
+into ssh as the configured worker user.
 
 If [name] is omitted, a uniformly random *running* worker is chosen.
 
 Any args after '--' are forwarded to ssh.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
+		if err := requireBuilt(); err != nil {
+			return err
+		}
 		m, err := newManager()
 		if err != nil {
 			return err
@@ -52,6 +56,7 @@ Any args after '--' are forwarded to ssh.`,
 		}
 
 		var w *worker.Worker
+		doneLookup := ui.Step("Selecting worker")
 		if name != "" {
 			w, err = m.Get(ctx, name)
 		} else {
@@ -63,10 +68,15 @@ Any args after '--' are forwarded to ssh.`,
 		if w.State != "" && w.State != "running" {
 			return fmt.Errorf("worker %s is %q, not running", w.Name, w.State)
 		}
+		doneLookup("%s (state=%s)", w.Name, w.State)
+
+		doneIP := ui.Step("Waiting for IP address (timeout %s)", sshWorkerOpts.wait)
 		ip, err := w.IPWait(ctx, sshWorkerOpts.wait)
 		if err != nil {
 			return err
 		}
+		doneIP("Got %s", ip)
+
 		fullArgs := []string{
 			"-o", "StrictHostKeyChecking=no",
 			"-o", "UserKnownHostsFile=/dev/null",
@@ -79,13 +89,13 @@ Any args after '--' are forwarded to ssh.`,
 		if err != nil {
 			return fmt.Errorf("ssh not found in PATH: %w", err)
 		}
-		fmt.Fprintf(cmd.ErrOrStderr(), "Connecting to %s (%s)...\n", w.Name, ip)
+		ui.Detail("Connecting as %s@%s ...", globalOpts.sshUser, ip)
 		return execve(bin, append([]string{"ssh"}, fullArgs...), os.Environ())
 	},
 }
 
 func init() {
 	sshWorkerCmd.Flags().DurationVar(&sshWorkerOpts.wait, "wait", 60*time.Second,
-		"How long to wait for the DHCP lease before giving up")
+		"How long to wait for the worker's IP address before giving up")
 	rootCmd.AddCommand(sshWorkerCmd)
 }

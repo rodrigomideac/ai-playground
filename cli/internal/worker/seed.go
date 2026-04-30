@@ -70,7 +70,7 @@ func BuildSeedISO(ctx context.Context, out, hostname, user, pubKey string, hostM
 		return err
 	}
 
-	return run(ctx, "xorriso", "-as", "mkisofs", "-quiet",
+	return runMuted(ctx, "xorriso", "-as", "mkisofs", "-quiet",
 		"-volid", "CIDATA", "-joliet", "-rock",
 		"-output", out,
 		filepath.Join(dir, "user-data"),

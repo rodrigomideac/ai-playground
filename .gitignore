@@ -10,9 +10,6 @@ packer/output-*/
 
 build/
 
-# Custom provision scripts (user-specific, not tracked)
-packer/custom-provision/*
-!packer/custom-provision/.gitkeep
 .claude/worktrees/
 
 # Generated Packer seed files (build-only SSH keypair + rendered user-data)

@@ -5,12 +5,12 @@ import (
 	"fmt"
 	"io"
 	"sort"
-	"text/tabwriter"
 	"time"
 
 	"github.com/spf13/cobra"
 
-	"github.com/rodrigomideac/ai-playground/internal/worker"
+	"github.com/rodrigomideac/ai-playground/cli/internal/ui"
+	"github.com/rodrigomideac/ai-playground/cli/internal/worker"
 )
 
 var listWorkersCmd = &cobra.Command{
@@ -18,6 +18,9 @@ var listWorkersCmd = &cobra.Command{
 	Aliases: []string{"ls"},
 	Short:   "Print the pool with each worker's state and IP",
 	RunE: func(cmd *cobra.Command, args []string) error {
+		if err := requireBuilt(); err != nil {
+			return err
+		}
 		m, err := newManager()
 		if err != nil {
 			return err
@@ -32,33 +35,56 @@ func init() {
 	rootCmd.AddCommand(listWorkersCmd)
 }
 
-// printPool emits a NAME / STATE / IP table for every worker the manager
-// sees, sorted by name. It's the canonical "what's in the pool" view used
-// by both `list-workers` and the post-add output of `add-worker` and
-// `shutdown-worker`.
+// printPool emits a colored, aligned NAME / STATE / IP table for every
+// worker the manager sees, sorted by name. Used standalone by
+// `list-workers` and embedded in `add-worker` / `shutdown-worker` after
+// their action lines.
 func printPool(out io.Writer, m *worker.Manager, ctx context.Context) error {
 	workers, err := m.List(ctx)
 	if err != nil {
 		return err
 	}
 	if len(workers) == 0 {
-		fmt.Fprintln(out, "(no workers)")
+		fmt.Fprintln(out, ui.Dim("(no workers)"))
 		return nil
 	}
 	sort.Slice(workers, func(i, j int) bool { return workers[i].Name < workers[j].Name })
 
-	tw := tabwriter.NewWriter(out, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(tw, "NAME\tSTATE\tIP")
+	rows := make([][]string, 0, len(workers))
+	running := 0
 	for _, w := range workers {
+		state := renderState(w.State)
 		ip := "-"
-		if w.State == "running" {
+		switch w.State {
+		case "running":
+			running++
 			if got, err := w.IP(ctx); err == nil {
 				ip = got
 			} else {
-				ip = "(no lease)"
+				ip = ui.Dim("(no IP yet)")
 			}
+		default:
+			ip = ui.Dim("-")
 		}
-		fmt.Fprintf(tw, "%s\t%s\t%s\n", w.Name, w.State, ip)
+		rows = append(rows, []string{w.Name, state, ip})
 	}
-	return tw.Flush()
+
+	ui.Table(out, []string{"NAME", "STATE", "IP"}, rows)
+	fmt.Fprintf(out, "%s\n",
+		ui.Dim(fmt.Sprintf("%d worker(s) — %d running, %d stopped",
+			len(workers), running, len(workers)-running)))
+	return nil
+}
+
+// renderState colors libvirt's domain-state strings: green for running,
+// dim for shut off, yellow for transient/paused/anything else.
+func renderState(s string) string {
+	switch s {
+	case "running":
+		return ui.Green("● ") + s
+	case "shut off", "":
+		return ui.Dim("○ " + s)
+	default:
+		return ui.Yellow("● ") + s
+	}
 }

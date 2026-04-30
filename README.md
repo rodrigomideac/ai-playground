@@ -2,9 +2,9 @@
 
 Have you wanted reproducible VMs to run agent workloads?
 
-This repo contains a CLI tool that can be used to spin up KVM/libvirt VMs, all preconfigured with tools that you decide.
+This project is a CLI tool that generates a golden image `.qcow2` file, and spins up VMs with that as base disk.
 
-The golden image ships with Docker, oh-my-zsh, neovim, and qemu-guest-agent by default. Add anything else via the [provisioning hooks](#customization).
+The golden image ships with Docker, oh-my-zsh, neovim, and qemu-guest-agent by default. 
 
 ## Why VMs and not containers
 
@@ -19,121 +19,33 @@ Basically, I wanted a reproducible development environment. Some benefits of usi
 
 This is a personal/local-first tool, use it at your own risk!
 
-## Quick start
+## Getting started
 
-### Prerequisites
-
-You need: KVM/QEMU, libvirt, Packer, Go, xorriso, and bats (for tests).
-
-<details>
-<summary><b>Manjaro / Arch</b></summary>
+Install the CLI:
 
 ```bash
-sudo pacman -S qemu-desktop libvirt virt-install bridge-utils \
-               packer go libisoburn bats
-sudo systemctl enable --now libvirtd
-sudo usermod -aG kvm,libvirt "$USER"
-# log out / back in for the new groups to take effect
+go install github.com/rodrigomideac/ai-playground/cli/cmd/ai-playground@latest
 ```
 
-</details>
-
-<details>
-<summary><b>Debian / Ubuntu</b></summary>
+Then verify your host has the rest of the dependencies (libvirt, qemu, Packer, ...):
 
 ```bash
-sudo apt install qemu-system-x86 libvirt-daemon-system virtinst \
-                 bridge-utils packer golang xorriso bats
-sudo systemctl enable --now libvirtd
-sudo usermod -aG kvm,libvirt "$USER"
+ai-playground doctor
 ```
 
-</details>
-
-<details>
-<summary><b>Fedora</b></summary>
+Anything missing prints with the literal command to fix it. Once doctor is green, walk through first-time setup and produce the golden image:
 
 ```bash
-sudo dnf install @virtualization libvirt virt-install bridge-utils \
-                 packer golang xorriso bats
-sudo systemctl enable --now libvirtd
-sudo usermod -aG kvm,libvirt "$USER"
+ai-playground build
 ```
 
-</details>
+It clones the public repo, walks you through which setup scripts to include and the worker-VM username, and runs Packer (~3-5 min on first run). After that, `ai-playground add-worker` spins up a worker.
 
-One-time host fix so the CLI can write disk overlays without sudo:
+For the full host-side setup (per-distro install lines, libvirt pool perms), see [docs/INSTALLATION.md](docs/INSTALLATION.md).
 
-```bash
-sudo chgrp libvirt /var/lib/libvirt/images
-sudo chmod g+rwxs  /var/lib/libvirt/images
-```
+## Documentation
 
-(The setgid bit makes new files inherit the `libvirt` group, which plays nicely with libvirt's `dynamic_ownership`.)
-
-### Build
-
-```bash
-make build-from-base   # downloads the Debian cloud qcow2, bakes provisioners (~3-5 min)
-make build-cli         # builds cli/bin/ai-playground (~5s)
-```
-
-Optionally put the CLI on `$PATH`:
-
-```bash
-sudo install -m 0755 cli/bin/ai-playground /usr/local/bin/
-```
-
-### Use
-
-```bash
-ai-playground add-worker            # spin up a worker (auto-named, prints pool table)
-ai-playground add-worker my-task    # named worker
-ai-playground list-workers          # show the pool
-ai-playground ssh-worker            # ssh into a random running worker
-ai-playground ssh-worker my-task    # ssh into a specific one
-ai-playground shutdown-worker       # tear down a random running worker
-ai-playground shutdown-worker my-task
-```
-
-`add-worker` accepts:
-
-- `--mount /host/path` — share a host directory inside the worker at `/home/vm/project` via virtio-9p
-- `--memory MiB` (default 4096), `--cpus N` (default 2) — sizing
-- `--no-wait` — return without waiting for the new worker's IP
-
-### Test
-
-```bash
-make test   # bats tests/ — ~3-5 minutes including worker spawns
-```
-
-The suite verifies host prerequisites, the CLI's CRUD path, golden image content (vm user, no debian user, /home/vm/.claude overlay, docker daemon, etc.), and multi-worker pool semantics.
-
-## Project layout
-
-```
-packer/      Packer template (qemu builder, cloud-image input)
-  default-provision/    Numbered provisioning scripts run during build
-  seed/                 Build-only NoCloud seed (gitignored runtime files)
-chroot/etc/skel/      Files copied into each worker's home at user creation
-cli/                  Go module
-  cmd/ai-playground/    binary entrypoint
-  internal/worker/      Manager, Worker, NoCloud seed builder
-scripts/              Build helpers (prereqs, prep seed, provision-chroot, lint)
-tests/                bats end-to-end test suite
-.claude/rules/        Auto-loaded Claude docs rules (one per subsystem)
-```
-
-## Customization
-
-Drop scripts into `packer/custom-provision/` to extend or override provisioning steps. By default:
-
-| Prefix | Script | What it does |
-|--------|--------|--------------|
-| `00` | `base-packages.sh` | apt install of cloud-init, qemu-guest-agent, curl, git, neovim, rsync, zsh |
-| `10` | `shell-config.sh` | oh-my-zsh, bashrc settings |
-| `20` | `claude-code.sh` | Claude Code CLI |
-| `30` | `docker.sh` | Docker, rootless setup |
-
-Same numeric prefix replaces the default. To add a step at position 25 between Claude Code and Docker, drop `custom-provision/25-my-tools.sh`. To skip Docker, drop `custom-provision/30-skip.sh` containing only `echo "skipping"`. Full reference (override rule, naming convention, script-writing rules, debugging tips) is in [`.claude/rules/docs-provisioning-hooks.md`](.claude/rules/docs-provisioning-hooks.md).
+- [docs/INSTALLATION.md](docs/INSTALLATION.md) — host prerequisites, libvirt setup, building the CLI
+- [docs/USAGE.md](docs/USAGE.md) — first build, daily commands (`add-worker` / `ssh-worker` / `list-workers` / `shutdown-worker`), `reset`, `doctor`, tests
+- [docs/CUSTOMIZATION.md](docs/CUSTOMIZATION.md) — adding setup scripts and per-worker files; headless / CI use
+- [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) — working on the CLI against a local checkout; project layout

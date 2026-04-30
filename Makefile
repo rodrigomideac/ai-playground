@@ -1,13 +1,11 @@
+# Repo-development convenience targets. End users build the golden image
+# with `ai-playground build` (after `ai-playground init`) — this Makefile
+# only covers tasks that operate on the *repo*, not on the user's
+# $XDG_CONFIG_HOME/ai-playground state.
+
 check:
 	bash ./scripts/lint-sh.sh
 	cd cli && go vet ./...
-
-build-from-base:
-	bash ./scripts/check-prerequisites.sh
-	bash ./scripts/prepare-packer-seed.sh
-	rm -rf build/packer-ai-playground-base
-	cd packer && packer init .
-	cd packer && ARTIFACT_DIR=../build packer build template.pkr.hcl
 
 build-cli:
 	cd cli && go build -o bin/ai-playground ./cmd/ai-playground
@@ -22,5 +20,8 @@ test:
 	  exit 1; \
 	}
 	@[ -x cli/bin/ai-playground ] || { echo "error: cli/bin/ai-playground missing — run 'make build-cli' first" >&2; exit 1; }
-	@[ -f build/packer-ai-playground-base/ai-playground-base ] || { echo "error: golden image missing — run 'make build-from-base' first" >&2; exit 1; }
+	@golden="$${XDG_DATA_HOME:-$$HOME/.local/share}/ai-playground/golden/ai-playground-base.qcow2"; \
+	[ -f "$$golden" ] || { echo "error: golden image missing at $$golden — run 'ai-playground build' first" >&2; exit 1; }
 	bats tests/
+
+.PHONY: check build-cli test

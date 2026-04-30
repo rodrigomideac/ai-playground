@@ -1,12 +1,12 @@
 package main
 
 import (
-	"fmt"
 	"time"
 
 	"github.com/spf13/cobra"
 
-	"github.com/rodrigomideac/ai-playground/internal/worker"
+	"github.com/rodrigomideac/ai-playground/cli/internal/ui"
+	"github.com/rodrigomideac/ai-playground/cli/internal/worker"
 )
 
 var addWorkerOpts struct {
@@ -20,16 +20,19 @@ var addWorkerOpts struct {
 var addWorkerCmd = &cobra.Command{
 	Use:   "add-worker [name]",
 	Short: "Add a worker to the pool",
-	Long: `Spins up a new worker VM by linked-cloning the golden qcow2,
-seeding cloud-init for the new instance, and starting the libvirt domain.
+	Long: `Spins up a new worker VM. Creates a per-worker disk on top of the
+golden image, prepares the worker's first-boot config, and starts the VM.
 
 If [name] is omitted, a random name like "worker-3f9a17" is generated.
 
-By default, blocks until the new worker has a DHCP-assigned IP, then
-prints the full pool table. Pass --no-wait to return immediately
-(the new worker will appear in the table without an IP yet).`,
+By default, blocks until the new worker has an IP address, then prints
+the full pool table. Pass --no-wait to return immediately (the new
+worker will appear in the table without an IP yet).`,
 	Args: cobra.MaximumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
+		if err := requireBuilt(); err != nil {
+			return err
+		}
 		var name string
 		if len(args) == 1 {
 			name = args[0]
@@ -40,6 +43,12 @@ prints the full pool table. Pass --no-wait to return immediately
 		}
 		ctx, cancel := contextWithTimeout(cmd.Context(), 5*time.Minute)
 		defer cancel()
+
+		displayName := name
+		if displayName == "" {
+			displayName = "<auto-named>"
+		}
+		doneCreate := ui.Step("Provisioning worker %s", displayName)
 		w, err := m.Create(ctx, name, worker.CreateOptions{
 			Memory:    int(addWorkerOpts.memory),
 			CPUs:      int(addWorkerOpts.cpus),
@@ -48,12 +57,19 @@ prints the full pool table. Pass --no-wait to return immediately
 		if err != nil {
 			return err
 		}
-		fmt.Fprintf(cmd.OutOrStdout(), "Added worker %s\n\n", w.Name)
+		doneCreate("Worker %s ready", w.Name)
+
 		if !addWorkerOpts.noWait {
-			if _, err := w.IPWait(ctx, addWorkerOpts.wait); err != nil {
-				fmt.Fprintf(cmd.ErrOrStderr(), "warning: %v\n\n", err)
+			doneIP := ui.Step("Waiting for IP address (timeout %s)", addWorkerOpts.wait)
+			ip, err := w.IPWait(ctx, addWorkerOpts.wait)
+			if err != nil {
+				ui.Warn("%v", err)
+			} else {
+				doneIP("Got %s", ip)
 			}
 		}
+
+		ui.Banner("Pool")
 		return printPool(cmd.OutOrStdout(), m, ctx)
 	},
 }

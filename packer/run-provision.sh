@@ -1,16 +1,15 @@
 #!/bin/bash
 set -euo pipefail
 
-# Provision runner: discovers and executes scripts from default-provision/
-# and custom-provision/ directories. Custom scripts override defaults when
-# they share the same numeric prefix.
+# Provision runner: discovers and executes scripts from a single directory in
+# numeric-prefix order. Bails on the first non-zero exit.
 
-BASE_DIR="${1:?Usage: run-provision.sh <base-dir>}"
-DEFAULT_DIR="$BASE_DIR/default-provision"
-CUSTOM_DIR="$BASE_DIR/custom-provision"
+PROVISION_DIR="${1:?Usage: run-provision.sh <provision-dir>}"
 
-declare -A scripts
-declare -A sources
+if [[ ! -d "$PROVISION_DIR" ]]; then
+    echo "[provision] ERROR: Directory not found: $PROVISION_DIR" >&2
+    exit 1
+fi
 
 # extract_prefix returns the leading digits from a filename
 extract_prefix() {
@@ -19,77 +18,46 @@ extract_prefix() {
     echo "$filename" | grep -oE '^[0-9]+' || true
 }
 
-# Register scripts from a directory, optionally overriding previous entries
-register_scripts() {
-    local dir="$1"
-    local source_label="$2"
+declare -a entries
 
-    if [[ ! -d "$dir" ]]; then
-        echo "[provision] Directory not found, skipping: $dir"
-        return
+for script in "$PROVISION_DIR"/*.sh; do
+    [[ -f "$script" ]] || continue
+    prefix="$(extract_prefix "$script")"
+    if [[ -z "$prefix" ]]; then
+        echo "[provision] WARNING: Skipping script without numeric prefix: $script"
+        continue
     fi
+    entries+=("$prefix|$script")
+done
 
-    local found=0
-    for script in "$dir"/*.sh; do
-        [[ -f "$script" ]] || continue
-        found=1
+if [[ ${#entries[@]} -eq 0 ]]; then
+    echo "[provision] No provision scripts found in $PROVISION_DIR. Nothing to do."
+    exit 0
+fi
 
-        local prefix
-        prefix="$(extract_prefix "$script")"
-        if [[ -z "$prefix" ]]; then
-            echo "[provision] WARNING: Skipping script without numeric prefix: $script"
-            continue
-        fi
-
-        if [[ -n "${scripts[$prefix]:-}" ]]; then
-            echo "[provision] OVERRIDE: $prefix — replacing ${sources[$prefix]} (${scripts[$prefix]}) with $source_label ($script)"
-        else
-            echo "[provision] Registered: $prefix — $source_label ($script)"
-        fi
-
-        scripts[$prefix]="$script"
-        sources[$prefix]="$source_label"
-    done
-
-    if [[ $found -eq 0 ]]; then
-        echo "[provision] No .sh scripts found in: $dir"
-    fi
-}
+mapfile -t sorted < <(printf '%s\n' "${entries[@]}" | sort -n -t '|' -k1)
 
 echo "============================================"
 echo " Provision Runner"
 echo "============================================"
-echo ""
-
-# Register defaults first, then customs (customs override at same prefix)
-register_scripts "$DEFAULT_DIR" "default"
-register_scripts "$CUSTOM_DIR" "custom"
-
-# Sort prefixes numerically and execute
-mapfile -t sorted_prefixes < <(echo "${!scripts[@]}" | tr ' ' '\n' | sort -n)
-
-if [[ ${#sorted_prefixes[@]} -eq 0 ]]; then
-    echo "[provision] No provision scripts found. Nothing to do."
-    exit 0
-fi
-
-echo ""
-echo "============================================"
-echo " Execution Plan (${#sorted_prefixes[@]} scripts)"
-echo "============================================"
-for prefix in "${sorted_prefixes[@]}"; do
-    echo "  [$prefix] ${scripts[$prefix]} (${sources[$prefix]})"
+echo
+echo " Execution Plan (${#sorted[@]} scripts)"
+for entry in "${sorted[@]}"; do
+    prefix="${entry%%|*}"
+    script="${entry#*|}"
+    echo "  [$prefix] $script"
 done
-echo ""
+echo
 
-for prefix in "${sorted_prefixes[@]}"; do
-    script="${scripts[$prefix]}"
+for entry in "${sorted[@]}"; do
+    prefix="${entry%%|*}"
+    script="${entry#*|}"
     echo "============================================"
     echo " Running [$prefix]: $script"
     echo "============================================"
     bash "$script"
     echo "[provision] Completed: $script"
-    echo ""
+    echo
 done
 
 echo "============================================"
