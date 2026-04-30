@@ -100,10 +100,11 @@ const stackPreamble = `ai-playground builds and runs Debian VMs through this sta
            binary ships with cracklib on Fedora/CentOS — a different
            tool. The doctor distinguishes them via 'packer version'.
 
-  Layer 6  ai-playground host tooling. xorriso (NoCloud seed ISO),
-           ssh-keygen (build-only ed25519 keypair), git (cloning the
-           public repo into the cache), curl (used by some provision
-           scripts).
+  Layer 6  ai-playground host tooling. ssh-keygen (build-only ed25519
+           keypair), git (cloning the public repo into the cache),
+           curl (used by some provision scripts). The per-worker
+           NoCloud seed ISO is built in-process via go-diskfs, so no
+           external ISO tool is required.
 `
 
 // All returns the full set of checks in stack order.
@@ -210,11 +211,6 @@ func All() []Check {
 			"Used by some provision scripts (e.g. claude-code installer, get-docker.sh) but not by the CLI itself. Listed here because a missing curl breaks the build inside the VM, not on the host.",
 			"command -v curl && curl --version | head -1",
 			"Fedora: dnf install curl | Ubuntu: apt install curl | Arch: pacman -S curl"),
-		cmdCheck("xorriso",
-			LayerHostTooling,
-			"ISO 9660 packer used to build the per-worker NoCloud seed (cidata.iso containing user-data + meta-data). Invoked as 'xorriso -as mkisofs -volid CIDATA -joliet -rock -output OUT user-data meta-data'. cloud-init's NoCloud datasource looks for the CIDATA volume label.",
-			"command -v xorriso && xorriso --version 2>&1 | head -1",
-			"Fedora: dnf install xorriso | Ubuntu: apt install xorriso | Arch: pacman -S libisoburn"),
 		cmdCheck("ssh-keygen",
 			LayerHostTooling,
 			"Generates the build-only ed25519 keypair under $XDG_CACHE_HOME/ai-playground/seed/id_ed25519. The public key is injected via cloud-init at Packer build time so Packer can SSH in as 'debian'; the matching authorized_keys is wiped by 'userdel -rf debian' as the last act of the build, so the keypair never reaches the produced golden image.",

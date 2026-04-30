@@ -16,14 +16,14 @@ If you'd rather build from source — for example to develop the CLI itself — 
 
 ## 2. Install the runtime dependencies
 
-You need: KVM/QEMU, libvirt, Packer, xorriso, git, ssh-keygen, and bats (for tests). `ai-playground doctor` will run a full host-environment check and name anything missing — see the [`doctor` section in USAGE.md](USAGE.md#diagnostics) — but the per-distro one-liners below cover everything in one shot.
+You need: KVM/QEMU, libvirt, Packer, git, ssh-keygen, and bats (for tests). `ai-playground doctor` will run a full host-environment check and name anything missing — see the [`doctor` section in USAGE.md](USAGE.md#diagnostics) — but the per-distro one-liners below cover everything in one shot.
 
 <details>
 <summary><b>Manjaro / Arch</b></summary>
 
 ```bash
 sudo pacman -S qemu-desktop libvirt virt-install bridge-utils \
-               packer go libisoburn bats
+               packer go bats
 sudo systemctl enable --now libvirtd
 sudo usermod -aG kvm,libvirt "$USER"
 # log out / back in for the new groups to take effect
@@ -36,7 +36,7 @@ sudo usermod -aG kvm,libvirt "$USER"
 
 ```bash
 sudo apt install qemu-system-x86 libvirt-daemon-system virtinst \
-                 bridge-utils packer golang xorriso bats
+                 bridge-utils packer golang bats
 sudo systemctl enable --now libvirtd
 sudo usermod -aG kvm,libvirt "$USER"
 ```
@@ -48,7 +48,7 @@ sudo usermod -aG kvm,libvirt "$USER"
 
 ```bash
 sudo dnf install @virtualization libvirt virt-install bridge-utils \
-                 packer golang xorriso bats
+                 packer golang bats
 sudo systemctl enable --now libvirtd
 sudo usermod -aG kvm,libvirt "$USER"
 ```

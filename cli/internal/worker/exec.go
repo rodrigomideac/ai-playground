@@ -41,9 +41,9 @@ func runQuiet(ctx context.Context, name string, args ...string) error {
 }
 
 // runMuted captures stdout+stderr and only prints them when the command
-// fails. Use for verbose tools (qemu-img, xorriso, virt-install) where
-// the success-path output is noise but the failure-path output is
-// essential for debugging.
+// fails. Use for verbose tools (qemu-img, virt-install) where the
+// success-path output is noise but the failure-path output is essential
+// for debugging.
 func runMuted(ctx context.Context, name string, args ...string) error {
 	var buf bytes.Buffer
 	cmd := exec.CommandContext(ctx, name, args...)

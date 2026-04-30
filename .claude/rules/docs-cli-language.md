@@ -49,7 +49,7 @@ The vocabulary the daily-use commands should use:
 | **(no internal URIs)** | qemu:///system, /var/run/libvirt/libvirt-sock |
 
 **Always keep literal:**
-- Tool/binary names (`Packer`, `virsh`, `qemu-img`, `xorriso`, `ssh-keygen`, `git`)
+- Tool/binary names (`Packer`, `virsh`, `qemu-img`, `ssh-keygen`, `git`)
 - Project-internal config keys (`vm_user`, `provision.include`, `on_conflict`)
 - Project-internal flag names (`--ssh-user`, `--repo-path`, `--prefix`)
 - Brand terms we've defined (`worker`, `golden image`, `provision/`, `chroot/etc/skel/`)

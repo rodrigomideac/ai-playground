@@ -114,9 +114,10 @@ for the precision-first register the doctor follows.
 Full set:
 
 - **Required commands present:** `git`, `curl`, `qemu-system-x86_64`,
-  `qemu-img`, `xorriso`, `ssh-keygen`, `packer`, `virsh`,
-  `virt-install`. Each missing entry prints the per-distro install
-  hint.
+  `qemu-img`, `ssh-keygen`, `packer`, `virsh`, `virt-install`. Each
+  missing entry prints the per-distro install hint. (The NoCloud seed
+  ISO is built in-process via `github.com/diskfs/go-diskfs`, so no
+  external ISO tool is checked.)
 - **`packer` is HashiCorp Packer**, not Fedora's cracklib `packer`.
   Heuristic: `packer version` first line starts with `Packer v`.
 - **`/dev/kvm` exists and is r/w by current user.** **C** Tested by

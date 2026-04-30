@@ -9,7 +9,8 @@ paths:
 `ai-playground` is the Go binary in `cli/cmd/ai-playground/` that manages
 the build of the Debian golden qcow2 image and a local pool of *worker*
 VMs cloned from it via libvirt. It shells out to `git`, `packer`,
-`virsh`, `virt-install`, `qemu-img`, `xorriso`, and `ssh-keygen`;
+`virsh`, `virt-install`, `qemu-img`, and `ssh-keygen` (NoCloud seed
+ISOs are built in-process via `github.com/diskfs/go-diskfs`);
 libvirt is the source of truth for runtime state, and
 `$XDG_CONFIG_HOME/ai-playground/config.yaml` is the source of truth for
 the build spec. Use this rule when changing the public command surface
@@ -110,9 +111,10 @@ keeping.)
 ## Storage pool permissions (one-time host setup)
 
 The default libvirt pool at `/var/lib/libvirt/images/` is `root:root
-755` on a fresh Manjaro install. The CLI runs `qemu-img create` and
-`xorriso` as the user, so it cannot write there out of the box.
-One-time fix:
+755` on a fresh Manjaro install. The CLI writes the qcow2 overlay
+(via `qemu-img create`) and the NoCloud seed ISO (in-process via
+go-diskfs) into that directory as the user, so it cannot write there
+out of the box. One-time fix:
 
 ```bash
 sudo chgrp libvirt /var/lib/libvirt/images
@@ -126,10 +128,17 @@ files to qemu/libvirt-qemu when the VM starts).
 
 ## NoCloud seed mechanics (`cli/internal/worker/seed.go`)
 
-`BuildSeedISO` writes `user-data` (Go-template-rendered) and
-`meta-data` to a temp dir, then runs `xorriso -as mkisofs -volid
-CIDATA -joliet -rock` to pack a CIDATA-labeled ISO. The seed is
-attached as an IDE CD-ROM via `--disk path=…,device=cdrom`.
+`BuildSeedISO` renders `user-data` from the Go template and
+synthesizes `meta-data`, then builds an ISO9660 image in-process with
+`github.com/diskfs/go-diskfs`. The volume identifier is set to
+`CIDATA` via `iso9660.FinalizeOptions.VolumeIdentifier` (the
+`VolumeLabel` field on `disk.FilesystemSpec` is a no-op for ISO9660 —
+go-diskfs ignores it for this fs type, so passing it is not enough,
+this gotcha is asserted by the `BlkidLabel` test in
+`seed_test.go`). Rock Ridge is enabled so the long filenames
+`user-data` and `meta-data` survive Linux's iso9660 driver intact.
+The resulting `<pool>/<domain>-seed.iso` is attached as an IDE
+CD-ROM via `--disk path=…,device=cdrom`.
 
 The 9p mount feature (`add-worker --mount /host/path`):
 - adds `--filesystem
