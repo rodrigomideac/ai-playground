@@ -188,6 +188,14 @@ func All() []Check {
 			Run:      checkDefaultNetwork,
 		},
 		{
+			Name:     "libvirt 'default' storage pool is defined, active and autostart=yes",
+			Layer:    LayerLibvirtd,
+			Cheap:    true,
+			Verifies: "Parses 'virsh pool-info default' for State: running and Autostart: yes. ai-playground resolves the per-worker overlay directory by calling 'virsh pool-dumpxml default' (Manager.PoolPath) on every add-worker, so without this pool the very first add-worker aborts with 'no storage pool with matching name default'. Note: libvirt-daemon-system on Debian/Ubuntu auto-creates the default network but NOT the default pool — Manjaro/Fedora ship templates that create both.",
+			Inspect:  "virsh -c qemu:///system pool-info default; virsh -c qemu:///system pool-list --all",
+			Run:      checkDefaultPool,
+		},
+		{
 			Name:     "/var/lib/libvirt/images is group=libvirt with mode g+rwxs",
 			Layer:    LayerLibvirtd,
 			Cheap:    true,
@@ -785,6 +793,61 @@ func checkDefaultNetwork(ctx context.Context) *Problem {
 	}
 	return &Problem{
 		Summary:  "libvirt 'default' network is defined but not Active=yes and Autostart=yes",
+		Commands: cmds,
+	}
+}
+
+func checkDefaultPool(ctx context.Context) *Problem {
+	if _, err := exec.LookPath("virsh"); err != nil {
+		return nil // covered by cmdCheck("virsh")
+	}
+	// EACCES on the socket would surface as "pool not defined" otherwise —
+	// defer to checkLibvirtGroup the same way checkDefaultNetwork does.
+	if !processInLibvirtGroup() {
+		return nil
+	}
+	cctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	out, err := exec.CommandContext(cctx, "virsh", "-c", "qemu:///system",
+		"pool-info", "default").Output()
+	if err != nil {
+		return &Problem{
+			Summary: "libvirt 'default' storage pool is not defined",
+			Commands: []string{
+				"sudo virsh pool-define-as default dir --target /var/lib/libvirt/images",
+				"sudo virsh pool-start default",
+				"sudo virsh pool-autostart default",
+			},
+		}
+	}
+	state := ""
+	autostart := false
+	for _, line := range strings.Split(string(out), "\n") {
+		k, v, ok := strings.Cut(line, ":")
+		if !ok {
+			continue
+		}
+		v = strings.TrimSpace(v)
+		switch strings.TrimSpace(k) {
+		case "State":
+			state = v
+		case "Autostart":
+			autostart = strings.EqualFold(v, "yes")
+		}
+	}
+	running := strings.EqualFold(state, "running")
+	if running && autostart {
+		return nil
+	}
+	var cmds []string
+	if !running {
+		cmds = append(cmds, "sudo virsh pool-start default")
+	}
+	if !autostart {
+		cmds = append(cmds, "sudo virsh pool-autostart default")
+	}
+	return &Problem{
+		Summary:  "libvirt 'default' storage pool is defined but not running and autostart=yes",
 		Commands: cmds,
 	}
 }

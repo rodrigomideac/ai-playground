@@ -128,6 +128,13 @@ Full set:
 - **libvirtd reachable:** `virsh -c qemu:///system list >/dev/null` succeeds.
 - **libvirt default network active + autostart.** **C** Parsed from
   `virsh net-info default`.
+- **libvirt default storage pool defined, running, autostart.** **C**
+  Parsed from `virsh pool-info default`. Note: `libvirt-daemon-system`
+  on Debian/Ubuntu auto-creates the default network but NOT the
+  default pool — Manjaro/Fedora ship templates that create both. The
+  fix the doctor prints is `virsh pool-define-as default dir --target
+  /var/lib/libvirt/images && virsh pool-start default && virsh
+  pool-autostart default`.
 - **`/var/lib/libvirt/images` is group `libvirt`, mode `g+rwxs`.** **C**
 - **SSH pubkey exists** at `~/.ssh/id_ed25519.pub` or `~/.ssh/id_rsa.pub`.
 
