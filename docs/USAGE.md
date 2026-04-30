@@ -14,7 +14,7 @@ ai-playground build
 2. Clones the public repo into `$XDG_CACHE_HOME/ai-playground/repo/`.
 3. Walks you through which setup scripts to include and the username to create inside each worker.
 4. Writes `$XDG_CONFIG_HOME/ai-playground/config.yaml` and seeds `$XDG_CONFIG_HOME/ai-playground/build/` with the template, runner, scripts, and `chroot/` overlay.
-5. Generates a build-only SSH key under `$XDG_CACHE_HOME/ai-playground/seed/`, runs Packer, and writes the result to `$XDG_DATA_HOME/ai-playground/golden/ai-playground-base.qcow2` (~3-5 minutes).
+5. Generates a build-only SSH key under `$XDG_CACHE_HOME/ai-playground/seed/`, runs Packer, and writes the result to `/var/lib/libvirt/images/ai-playground-base.qcow2` (the libvirt pool — placed there so libvirt-qemu can open it as a backing file without crossing your `$HOME`) (~3-5 minutes).
 
 There is also a standalone `ai-playground init` that does steps 1-4 only — useful if you want to edit `build/` before starting the (~5 minute) Packer run.
 

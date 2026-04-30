@@ -21,6 +21,7 @@ var resetCmd = &cobra.Command{
   $XDG_CONFIG_HOME/ai-playground/
   $XDG_CACHE_HOME/ai-playground/
   $XDG_DATA_HOME/ai-playground/
+  /var/lib/libvirt/images/ai-playground-base.qcow2 (the golden image)
 
 If any workers exist with the configured prefix, you will be asked
 whether to stop them (and delete their disks) before the directory
@@ -38,8 +39,8 @@ func init() {
 func runReset(out io.Writer) error {
 	p := cliCtx.Paths
 	ui.Banner("ai-playground reset")
-	fmt.Fprintf(out, "About to remove:\n  %s\n  %s\n  %s\n\n",
-		ui.Bold(p.ConfigDir), ui.Bold(p.CacheDir), ui.Bold(p.DataDir))
+	fmt.Fprintf(out, "About to remove:\n  %s\n  %s\n  %s\n  %s\n\n",
+		ui.Bold(p.ConfigDir), ui.Bold(p.CacheDir), ui.Bold(p.DataDir), ui.Bold(p.GoldenImage))
 
 	prompt := promptio.New()
 	ok, err := prompt.Confirm("Type 'reset' to confirm:", "reset")
@@ -59,6 +60,17 @@ func runReset(out io.Writer) error {
 		done := ui.Step("Removing %s", dir)
 		if err := os.RemoveAll(dir); err != nil {
 			return fmt.Errorf("remove %s: %w", dir, err)
+		}
+		done("")
+	}
+	// The golden image lives in the libvirt pool dir (so libvirt-qemu can
+	// read it without crossing the user's $HOME) and isn't covered by the
+	// XDG dir wipe above. The user is in the libvirt group with g+w on the
+	// pool dir, so a regular os.Remove suffices — no sudo needed.
+	if _, err := os.Stat(p.GoldenImage); err == nil {
+		done := ui.Step("Removing %s", p.GoldenImage)
+		if err := os.Remove(p.GoldenImage); err != nil {
+			return fmt.Errorf("remove %s: %w", p.GoldenImage, err)
 		}
 		done("")
 	}

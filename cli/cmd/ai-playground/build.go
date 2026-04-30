@@ -6,7 +6,9 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"os/user"
 	"path/filepath"
+	"strconv"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -252,17 +254,50 @@ func moveGolden(p *paths.Paths) error {
 	if _, err := os.Stat(produced); err != nil {
 		return fmt.Errorf("packer build did not produce expected artifact at %s: %w", produced, err)
 	}
-	if err := os.MkdirAll(p.GoldenDir, 0o755); err != nil {
-		return err
+	// Target directory is the libvirt pool. We rely on the doctor's
+	// host-prep step to have created it group-owned by 'libvirt' with
+	// mode 2770 — don't MkdirAll it here, since failure to do so would be
+	// papering over a real misconfiguration.
+	if _, err := os.Stat(paths.LibvirtPoolDir); err != nil {
+		return fmt.Errorf("libvirt pool directory %s missing: run 'ai-playground doctor' to set it up: %w", paths.LibvirtPoolDir, err)
 	}
 	if err := os.Rename(produced, p.GoldenImage); err != nil {
-		// Cross-filesystem fallback.
+		// Cross-filesystem fallback (e.g. /var on a separate fs from $XDG_CACHE_HOME).
 		if err := copyGolden(produced, p.GoldenImage); err != nil {
 			return fmt.Errorf("move golden: %w", err)
 		}
 		_ = os.Remove(produced)
 	}
+	// Normalize ownership + mode so libvirt-qemu can read the backing file
+	// regardless of which path (rename vs copy fallback) we took. Rename
+	// preserves the source inode's group (= the building user's primary gid),
+	// while a fresh create inside the setgid pool dir inherits group=libvirt
+	// — explicit chgrp avoids that path-dependent inconsistency. 0644 makes
+	// reading robust to whether libvirt-qemu happens to be a member of the
+	// libvirt group in the host's libvirt configuration.
+	if err := chgrpToLibvirt(p.GoldenImage); err != nil {
+		return fmt.Errorf("chgrp golden image to libvirt: %w", err)
+	}
+	if err := os.Chmod(p.GoldenImage, 0o644); err != nil {
+		return fmt.Errorf("chmod golden image: %w", err)
+	}
 	return nil
+}
+
+// chgrpToLibvirt sets the group of path to the 'libvirt' POSIX group. The
+// current user is expected to be in that group (verified by the doctor's
+// libvirt-group check), which is the precondition for chown(2) to allow a
+// non-root caller to change the group ownership.
+func chgrpToLibvirt(path string) error {
+	g, err := user.LookupGroup("libvirt")
+	if err != nil {
+		return fmt.Errorf("lookup libvirt group: %w", err)
+	}
+	gid, err := strconv.Atoi(g.Gid)
+	if err != nil {
+		return fmt.Errorf("parse libvirt gid %q: %w", g.Gid, err)
+	}
+	return os.Chown(path, -1, gid)
 }
 
 func copyGolden(src, dst string) error {

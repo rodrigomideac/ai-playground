@@ -10,6 +10,22 @@ import (
 	"strings"
 )
 
+// LibvirtPoolDir is the libvirt 'default' storage pool path. ai-playground
+// writes the golden image here, and per-worker qcow2 overlays + NoCloud
+// seed ISOs are also created here. The directory is set up by the doctor's
+// host-prep flow as 'libvirt:libvirt 2770' so members of the libvirt group
+// can write files into it that inherit group=libvirt (setgid). Storing the
+// golden image inside the libvirt pool is what lets libvirt-qemu (the
+// runtime user under libvirt-daemon-system on Debian/Ubuntu) read the
+// backing file directly — without traversing the user's $HOME, which is
+// 0700 by default and otherwise blocks the open.
+const LibvirtPoolDir = "/var/lib/libvirt/images"
+
+// GoldenImageName is the filename of the golden qcow2 within the libvirt
+// pool. Per-worker overlay disks share the same directory but use the
+// 'aip-<worker>.qcow2' / 'aip-<worker>-seed.iso' naming from manager.go.
+const GoldenImageName = "ai-playground-base.qcow2"
+
 // Paths is the resolved set of filesystem locations the CLI uses.
 type Paths struct {
 	// Roots
@@ -31,9 +47,11 @@ type Paths struct {
 	PackerDir string // packer/ (Packer working dir / artifact_dir)
 
 	// Under DataDir
-	GoldenDir   string // golden/
-	GoldenImage string // golden/ai-playground-base.qcow2
-	BinDir      string // bin/    (vendored CLI tools, e.g. packer)
+	BinDir string // bin/    (vendored CLI tools, e.g. packer)
+
+	// In the libvirt pool (system-level path; not under DataDir so that
+	// libvirt-qemu can read it without crossing the user's home directory).
+	GoldenImage string // /var/lib/libvirt/images/ai-playground-base.qcow2
 }
 
 // Default builds Paths from the XDG environment with the standard fallbacks.
@@ -59,7 +77,6 @@ func New(configHome, cacheHome, dataHome string) *Paths {
 	cacheDir := filepath.Join(cacheHome, "ai-playground")
 	dataDir := filepath.Join(dataHome, "ai-playground")
 	buildDir := filepath.Join(cfgDir, "build")
-	goldenDir := filepath.Join(dataDir, "golden")
 	return &Paths{
 		ConfigDir:    cfgDir,
 		CacheDir:     cacheDir,
@@ -73,9 +90,8 @@ func New(configHome, cacheHome, dataHome string) *Paths {
 		RepoCache:    filepath.Join(cacheDir, "repo"),
 		SeedDir:      filepath.Join(cacheDir, "seed"),
 		PackerDir:    filepath.Join(cacheDir, "packer"),
-		GoldenDir:    goldenDir,
-		GoldenImage:  filepath.Join(goldenDir, "ai-playground-base.qcow2"),
 		BinDir:       filepath.Join(dataDir, "bin"),
+		GoldenImage:  filepath.Join(LibvirtPoolDir, GoldenImageName),
 	}
 }
 

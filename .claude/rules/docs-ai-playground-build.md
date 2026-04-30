@@ -38,8 +38,8 @@ XDG-compliant. Standard fallbacks apply when `XDG_*_HOME` is unset.
 | `$XDG_CACHE_HOME/ai-playground/repo/` | Clone of the public repo — the source from which `init` populates `build/`. |
 | `$XDG_CACHE_HOME/ai-playground/seed/` | Build-only ed25519 keypair (`id_ed25519` + `.pub`), `user-data.tpl`, rendered `user-data`, `meta-data`. |
 | `$XDG_CACHE_HOME/ai-playground/packer/` | Packer working dir / artifact output. |
-| `$XDG_DATA_HOME/ai-playground/golden/ai-playground-base.qcow2` | The built golden image. The worker manager reads from here. |
 | `$XDG_DATA_HOME/ai-playground/bin/packer-<version>` | Pinned Packer binary downloaded by `build` on first run (see `internal/vendoring/packer`). |
+| `/var/lib/libvirt/images/ai-playground-base.qcow2` | The built golden image. Lives **inside the libvirt pool dir** (not under `$XDG_DATA_HOME`) so `libvirt-qemu` — qemu's runtime user under `libvirt-daemon-system` on Debian/Ubuntu — can open it as a backing file without traversing the user's `$HOME` (default mode 0700). The pool dir is `libvirt:libvirt 2770` from the doctor's host-prep step, so the building user (a libvirt-group member) can write here, and the build's `chgrp libvirt + chmod 0644` makes the file readable by every libvirt-qemu configuration. |
 
 `paths.go` (in `cli/internal/paths`) is the single source of truth for
 these locations. Don't hard-code XDG paths anywhere else.
@@ -234,12 +234,16 @@ $XDG_CACHE_HOME/ai-playground/packer/packer-ai-playground-base/ai-playground-bas
 `build` then renames it to:
 
 ```
-$XDG_DATA_HOME/ai-playground/golden/ai-playground-base.qcow2
+/var/lib/libvirt/images/ai-playground-base.qcow2
 ```
 
-A cross-filesystem rename falls back to copy + delete. The worker
-manager reads from the second path; the daily commands fast-fail
-when it's missing.
+A cross-filesystem rename falls back to copy + delete (likely path on
+hosts with `/var` on its own filesystem). After the move, `build`
+sets group=libvirt and mode 0644 on the file so libvirt-qemu can
+read it regardless of how the host's libvirt configuration runs
+qemu (Debian's `libvirt-qemu` user, Arch/Manjaro's typical `nobody`
+or `root`, etc.). The worker manager reads from this path; the
+daily commands fast-fail when it's missing.
 
 ## Build-only seed (`internal/seed`)
 

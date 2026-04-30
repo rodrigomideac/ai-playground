@@ -50,7 +50,7 @@ worker via `Manager.Random(ctx)`. Auto-generated names look like
 
 Persistent flags (every subcommand): `--ssh-pubkey`, `--golden`,
 `--pool`, `--network`, `--prefix`, `--ssh-user`, `--repo-path`.
-- `--golden` defaults to `$XDG_DATA_HOME/ai-playground/golden/ai-playground-base.qcow2`.
+- `--golden` defaults to `/var/lib/libvirt/images/ai-playground-base.qcow2` (the libvirt 'default' pool dir — chosen so libvirt-qemu can open the backing file without crossing the user's `$HOME`, which is mode 0700 on Debian/Ubuntu and otherwise blocks the read).
 - `--ssh-user` defaults to `vm_user` from `config.yaml` if it exists,
   else `vm`.
 - `--repo-path` overrides the public-repo cache used by `init` and

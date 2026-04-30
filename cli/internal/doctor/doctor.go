@@ -853,7 +853,7 @@ func checkDefaultPool(ctx context.Context) *Problem {
 }
 
 func checkPoolPerms(ctx context.Context) *Problem {
-	const path = "/var/lib/libvirt/images"
+	const path = paths.LibvirtPoolDir
 	info, err := os.Stat(path)
 	if err != nil {
 		// Bundle mkdir + chgrp + chmod so the user fixes this in one shot

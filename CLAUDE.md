@@ -13,7 +13,9 @@ NoCloud seed ISO that the CLI builds per worker.
 script selection, and seeding `$XDG_CONFIG_HOME/ai-playground/build/`.
 `ai-playground build` runs (or re-runs) Packer against that build
 directory and writes the golden image to
-`$XDG_DATA_HOME/ai-playground/golden/ai-playground-base.qcow2`. Daily
+`/var/lib/libvirt/images/ai-playground-base.qcow2` (the libvirt
+'default' storage pool dir, so libvirt-qemu can read the backing file
+without traversing the user's $HOME). Daily
 commands (`add-worker`, `ssh-worker`, `shutdown-worker`,
 `list-workers`) read both `config.yaml` and the golden image; if
 either is missing they exit with `run 'ai-playground build' first`.

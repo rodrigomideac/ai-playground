@@ -63,7 +63,7 @@ func init() {
 	rootCmd.PersistentFlags().StringVar(&globalOpts.pubkey, "ssh-pubkey", defaultPubKey(),
 		"SSH public key file authorized for the worker user")
 	rootCmd.PersistentFlags().StringVar(&globalOpts.golden, "golden", "",
-		"Path to the golden qcow2 image (default: $XDG_DATA_HOME/ai-playground/golden/ai-playground-base.qcow2)")
+		"Path to the golden qcow2 image (default: /var/lib/libvirt/images/ai-playground-base.qcow2)")
 	rootCmd.PersistentFlags().StringVar(&globalOpts.pool, "pool", "default",
 		"libvirt storage pool")
 	rootCmd.PersistentFlags().StringVar(&globalOpts.network, "network", "default",
