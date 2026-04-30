@@ -19,6 +19,7 @@ import (
 	"github.com/rodrigomideac/ai-playground/cli/internal/repo"
 	"github.com/rodrigomideac/ai-playground/cli/internal/seed"
 	"github.com/rodrigomideac/ai-playground/cli/internal/ui"
+	vendoredpacker "github.com/rodrigomideac/ai-playground/cli/internal/vendoring/packer"
 	"github.com/rodrigomideac/ai-playground/cli/internal/worker"
 )
 
@@ -133,8 +134,15 @@ func runPackerBuild(ctx context.Context, out io.Writer) error {
 		return err
 	}
 
+	doneVendor := ui.Step("Installing Packer %s (one-time download)", vendoredpacker.Version)
+	packerBin, err := vendoredpacker.Default(p.BinDir).Ensure(ctx)
+	if err != nil {
+		return fmt.Errorf("install vendored Packer: %w", err)
+	}
+	doneVendor(packerBin)
+
 	doneInit := ui.Step("Preparing Packer")
-	if err := runPacker(ctx, out, p, "init", "template.pkr.hcl"); err != nil {
+	if err := runPacker(ctx, out, p, packerBin, "init", "template.pkr.hcl"); err != nil {
 		return fmt.Errorf("packer init: %w", err)
 	}
 	doneInit("")
@@ -146,7 +154,7 @@ func runPackerBuild(ctx context.Context, out io.Writer) error {
 	_ = os.RemoveAll(priorOutput)
 
 	doneBuild := ui.Step("Building golden image — boots Debian, runs setup scripts, cleans up (~5 min on first run)")
-	if err := runPacker(ctx, out, p, "build",
+	if err := runPacker(ctx, out, p, packerBin, "build",
 		"-var", "seed_dir="+p.SeedDir,
 		"template.pkr.hcl"); err != nil {
 		return fmt.Errorf("packer build: %w", err)
@@ -230,8 +238,8 @@ func validateProvisionScripts(p *paths.Paths, cfg *config.Config) error {
 	return nil
 }
 
-func runPacker(ctx context.Context, out io.Writer, p *paths.Paths, args ...string) error {
-	cmd := exec.CommandContext(ctx, "packer", args...)
+func runPacker(ctx context.Context, out io.Writer, p *paths.Paths, packerBin string, args ...string) error {
+	cmd := exec.CommandContext(ctx, packerBin, args...)
 	cmd.Dir = p.BuildDir
 	cmd.Stdout = out
 	cmd.Stderr = os.Stderr

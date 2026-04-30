@@ -33,6 +33,7 @@ type Paths struct {
 	// Under DataDir
 	GoldenDir   string // golden/
 	GoldenImage string // golden/ai-playground-base.qcow2
+	BinDir      string // bin/    (vendored CLI tools, e.g. packer)
 }
 
 // Default builds Paths from the XDG environment with the standard fallbacks.
@@ -74,6 +75,7 @@ func New(configHome, cacheHome, dataHome string) *Paths {
 		PackerDir:    filepath.Join(cacheDir, "packer"),
 		GoldenDir:    goldenDir,
 		GoldenImage:  filepath.Join(goldenDir, "ai-playground-base.qcow2"),
+		BinDir:       filepath.Join(dataDir, "bin"),
 	}
 }
 

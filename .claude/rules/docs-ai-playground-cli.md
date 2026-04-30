@@ -8,9 +8,10 @@ paths:
 
 `ai-playground` is the Go binary in `cli/cmd/ai-playground/` that manages
 the build of the Debian golden qcow2 image and a local pool of *worker*
-VMs cloned from it via libvirt. It shells out to `git`, `packer`,
-`virsh`, `virt-install`, `qemu-img`, and `ssh-keygen` (NoCloud seed
-ISOs are built in-process via `github.com/diskfs/go-diskfs`);
+VMs cloned from it via libvirt. It shells out to `git`, `virsh`,
+`virt-install`, `qemu-img`, `ssh-keygen`, and a Packer binary it
+downloads itself into `$XDG_DATA_HOME/ai-playground/bin/`. (NoCloud
+seed ISOs are built in-process via `github.com/diskfs/go-diskfs`.)
 libvirt is the source of truth for runtime state, and
 `$XDG_CONFIG_HOME/ai-playground/config.yaml` is the source of truth for
 the build spec. Use this rule when changing the public command surface
