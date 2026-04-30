@@ -21,6 +21,7 @@ import (
 	"os/exec"
 	"os/user"
 	"sort"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -164,11 +165,11 @@ func All() []Check {
 
 		// Layer 3 — libvirtd
 		{
-			Name:     "current user is a member of group 'libvirt'",
+			Name:     "current process has the 'libvirt' supplementary gid",
 			Layer:    LayerLibvirtd,
 			Cheap:    true,
-			Verifies: "libvirtd's UNIX socket /var/run/libvirt/libvirt-sock is mode 0770 owned by user/group 'libvirt'. Non-members get EACCES on connect, so virsh -c qemu:///system fails for everything.",
-			Inspect:  "ls -l /var/run/libvirt/libvirt-sock; id -nG | tr ' ' '\\n' | grep -qx libvirt && echo 'in libvirt group' || echo 'NOT in libvirt group'",
+			Verifies: "libvirtd's UNIX socket /var/run/libvirt/libvirt-sock is mode 0770 owned by user/group 'libvirt'. Non-members get EACCES on connect, so virsh -c qemu:///system fails. Authoritative test: os.Getgroups() (kernel process credentials) — usermod updates /etc/group immediately but the running shell's credentials are only refreshed by a new login session.",
+			Inspect:  "ls -l /var/run/libvirt/libvirt-sock; id -G | tr ' ' '\\n' | grep -qx \"$(getent group libvirt | cut -d: -f3)\" && echo 'in libvirt group (process)' || echo 'NOT in libvirt group (process credentials)'",
 			Run:      checkLibvirtGroup,
 		},
 		{
@@ -596,10 +597,6 @@ func checkKVMAccess(ctx context.Context) *Problem {
 }
 
 func checkLibvirtGroup(ctx context.Context) *Problem {
-	u, err := user.Current()
-	if err != nil {
-		return &Problem{Summary: "could not look up current user: " + err.Error()}
-	}
 	g, err := user.LookupGroup("libvirt")
 	if err != nil {
 		// The libvirt group is created by the libvirt-daemon-system /
@@ -615,20 +612,82 @@ func checkLibvirtGroup(ctx context.Context) *Problem {
 			Hint: "After install, re-run 'ai-playground doctor' to pick up the new group.",
 		}
 	}
-	gids, err := u.GroupIds()
+	libvirtGid, err := strconv.Atoi(g.Gid)
 	if err != nil {
-		return &Problem{Summary: "could not list current user's groups: " + err.Error()}
+		return &Problem{Summary: "libvirt group has non-numeric gid: " + g.Gid}
 	}
-	for _, id := range gids {
-		if id == g.Gid {
+	// Authoritative test: kernel-credential supplementary groups of *this*
+	// process. /etc/group membership (what u.GroupIds() reads) updates the
+	// instant 'usermod -aG' runs, but the running shell's process keeps its
+	// pre-usermod gid set until a new login session is started. The libvirt
+	// socket's mode 0770 + group=libvirt is gated by the kernel credentials,
+	// so this is what actually controls whether 'virsh -c qemu:///system'
+	// succeeds. Same idea as checkKVMAccess opening /dev/kvm — let the kernel
+	// answer.
+	procGroups, err := os.Getgroups()
+	if err != nil {
+		return &Problem{Summary: "could not read process supplementary groups: " + err.Error()}
+	}
+	for _, id := range procGroups {
+		if id == libvirtGid {
 			return nil
 		}
 	}
-	return &Problem{
-		Summary:  "current user is not a member of POSIX group 'libvirt'",
-		Commands: []string{"sudo usermod -aG libvirt $USER"},
-		Hint:     "# then log out and back in",
+	// Process doesn't have libvirt gid. Distinguish "user never got added"
+	// (needs usermod) from "added but this shell predates the change" (needs
+	// a fresh login session). The two require different fixes.
+	u, err := user.Current()
+	if err != nil {
+		return &Problem{Summary: "could not look up current user: " + err.Error()}
 	}
+	onPaperGids, err := u.GroupIds()
+	if err != nil {
+		return &Problem{Summary: "could not list current user's on-paper groups: " + err.Error()}
+	}
+	onPaper := false
+	for _, id := range onPaperGids {
+		if id == g.Gid {
+			onPaper = true
+			break
+		}
+	}
+	if !onPaper {
+		return &Problem{
+			Summary:  "current user is not a member of POSIX group 'libvirt'",
+			Commands: []string{"sudo usermod -aG libvirt $USER"},
+			Hint:     "# then log out and log back in for the new gid to apply to your shell",
+		}
+	}
+	return &Problem{
+		Summary: "this shell session is missing the 'libvirt' gid (usermod ran but the shell predates it)",
+		Hint: "Log out and log back in (a fresh login session re-fetches the supplementary group set).\n" +
+			"# alternative: 'exec su - $USER' starts a new login session in this terminal",
+	}
+}
+
+// processInLibvirtGroup reports whether the libvirt gid is in this process's
+// kernel-credential supplementary group set. Used by the libvirtd /
+// default-network checks to decline reporting downstream socket-EACCES
+// failures whose root cause is checkLibvirtGroup's responsibility.
+func processInLibvirtGroup() bool {
+	g, err := user.LookupGroup("libvirt")
+	if err != nil {
+		return false
+	}
+	gid, err := strconv.Atoi(g.Gid)
+	if err != nil {
+		return false
+	}
+	procGroups, err := os.Getgroups()
+	if err != nil {
+		return false
+	}
+	for _, id := range procGroups {
+		if id == gid {
+			return true
+		}
+	}
+	return false
 }
 
 func checkCPUVirt(ctx context.Context) *Problem {
@@ -649,13 +708,27 @@ func checkLibvirtd(ctx context.Context) *Problem {
 	if _, err := exec.LookPath("virsh"); err != nil {
 		return nil // covered by cmdCheck("virsh")
 	}
+	const sockPath = "/var/run/libvirt/libvirt-sock"
+	if _, err := os.Stat(sockPath); os.IsNotExist(err) {
+		return &Problem{
+			Summary:  "libvirtd is not running (socket " + sockPath + " is missing)",
+			Commands: []string{"sudo systemctl enable --now libvirtd"},
+		}
+	}
 	cctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 	if err := exec.CommandContext(cctx, "virsh", "-c", "qemu:///system", "list").Run(); err != nil {
+		// Socket is present but virsh failed. The most common cause is
+		// missing libvirt gid in the process credentials — the libvirt-group
+		// check is the authority for that, so don't double-report (otherwise
+		// the Quick fix block ends up suggesting 'systemctl enable libvirtd'
+		// which is a no-op for a permission problem).
+		if !processInLibvirtGroup() {
+			return nil
+		}
 		return &Problem{
-			Summary:  "libvirtd is not reachable on the qemu:///system socket",
-			Commands: []string{"sudo systemctl enable --now libvirtd"},
-			Hint:     "# also confirm /var/run/libvirt/libvirt-sock exists and your user is in group 'libvirt'",
+			Summary: "libvirtd socket is present but 'virsh -c qemu:///system list' failed",
+			Hint:    "Inspect: systemctl status libvirtd; journalctl -u libvirtd --no-pager | tail -50",
 		}
 	}
 	return nil
@@ -663,6 +736,12 @@ func checkLibvirtd(ctx context.Context) *Problem {
 
 func checkDefaultNetwork(ctx context.Context) *Problem {
 	if _, err := exec.LookPath("virsh"); err != nil {
+		return nil
+	}
+	// Without libvirt gid in process credentials, virsh net-info would fail
+	// with EACCES on the socket and the error would be misread as "network
+	// not defined". checkLibvirtGroup is the authority for that case.
+	if !processInLibvirtGroup() {
 		return nil
 	}
 	cctx, cancel := context.WithTimeout(ctx, 5*time.Second)
