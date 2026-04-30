@@ -20,17 +20,29 @@ import (
 	"os"
 	"os/exec"
 	"os/user"
+	"sort"
 	"strings"
 	"syscall"
 	"time"
 
+	"github.com/rodrigomideac/ai-playground/cli/internal/paths"
 	"github.com/rodrigomideac/ai-playground/cli/internal/ui"
 )
 
 // Problem is a single failed check, ready to print as a punch-list entry.
+//
+// A check provides EITHER structured fix data (Packages and/or Commands) or
+// a free-form Hint (or both). Structured data is what powers the consolidated
+// "Quick fix" summary block at the bottom of doctor output — it's collated
+// across all problems and rendered as a single per-distro install command +
+// follow-up commands. Hint stays free-form for things that can't be expressed
+// as a package install or a literal command (BIOS settings, "log out and
+// back in", etc.).
 type Problem struct {
-	Summary string
-	Hint    string // multi-line; rendered with each line indented
+	Summary  string
+	Hint     string                    // multi-line free-form note, rendered indented
+	Packages map[paths.Distro][]string // optional; distro→package list to install
+	Commands []string                  // optional; sudo / shell commands to run, in order
 }
 
 // Layer labels group checks by which slice of the KVM/qemu/libvirt stack
@@ -135,12 +147,20 @@ func All() []Check {
 			LayerQEMU,
 			"qemu's per-VM userspace VMM binary. Drives the guest CPU/MMU via /dev/kvm ioctls and emulates the chipset, BIOS, and virtio devices. Invoked directly by Packer at build time and indirectly (via libvirtd) at worker runtime.",
 			"command -v qemu-system-x86_64 && qemu-system-x86_64 --version | head -1",
-			"Fedora: dnf install @virtualization | Ubuntu: apt install qemu-system-x86 | Arch: pacman -S qemu-desktop"),
+			map[paths.Distro][]string{
+				paths.DistroDebian: {"qemu-system-x86", "qemu-utils"},
+				paths.DistroFedora: {"@virtualization"},
+				paths.DistroArch:   {"qemu-desktop"},
+			}),
 		cmdCheck("qemu-img",
 			LayerQEMU,
 			"qemu's disk-image utility. ai-playground shells out to 'qemu-img create -f qcow2 -F qcow2 -b GOLDEN OVERLAY' for every add-worker.",
 			"command -v qemu-img && qemu-img --version | head -1",
-			"Shipped with qemu (see qemu-system-x86_64 hint)."),
+			map[paths.Distro][]string{
+				paths.DistroDebian: {"qemu-utils"},
+				paths.DistroFedora: {"@virtualization"},
+				paths.DistroArch:   {"qemu-desktop"},
+			}),
 
 		// Layer 3 — libvirtd
 		{
@@ -180,12 +200,20 @@ func All() []Check {
 			LayerLibvirtCli,
 			"libvirt's CLI client. ai-playground shells out to virsh for: list/destroy/undefine domains, dominfo, domstate, domifaddr (DHCP lease), pool-dumpxml (storage path), pool-refresh, net-info, net-dhcp-leases.",
 			"command -v virsh && virsh --version",
-			"Fedora: dnf install libvirt-client | Ubuntu: apt install libvirt-clients | Arch: pacman -S libvirt"),
+			map[paths.Distro][]string{
+				paths.DistroDebian: {"libvirt-clients", "libvirt-daemon-system"},
+				paths.DistroFedora: {"libvirt-client", "libvirt-daemon"},
+				paths.DistroArch:   {"libvirt"},
+			}),
 		cmdCheck("virt-install",
 			LayerLibvirtCli,
 			"libvirt's domain-creation tool. Constructs domain XML from CLI flags (--memory, --vcpus, --disk, --network, --machine, --video, ...) and submits it to libvirtd via the libvirt API. add-worker invokes this with --import to define + start a worker from an existing qcow2 overlay.",
 			"command -v virt-install && virt-install --version",
-			"Fedora: dnf install virt-install | Ubuntu: apt install virtinst | Arch: pacman -S virt-install"),
+			map[paths.Distro][]string{
+				paths.DistroDebian: {"virtinst"},
+				paths.DistroFedora: {"virt-install"},
+				paths.DistroArch:   {"virt-install"},
+			}),
 
 		// Layer 5 — Packer is vendored by 'ai-playground build' on first
 		// run (see internal/vendoring/packer); no host check needed.
@@ -195,17 +223,29 @@ func All() []Check {
 			LayerHostTooling,
 			"Used to clone https://github.com/rodrigomideac/ai-playground into $XDG_CACHE_HOME/ai-playground/repo/ on first init/build, and to fetch+reset --hard origin/master on subsequent runs. Bypassed entirely when --repo-path or AI_PLAYGROUND_REPO is set.",
 			"command -v git && git --version",
-			"Fedora: dnf install git | Ubuntu: apt install git | Arch: pacman -S git"),
+			map[paths.Distro][]string{
+				paths.DistroDebian: {"git"},
+				paths.DistroFedora: {"git"},
+				paths.DistroArch:   {"git"},
+			}),
 		cmdCheck("curl",
 			LayerHostTooling,
 			"Used by some provision scripts (e.g. claude-code installer, get-docker.sh) but not by the CLI itself. Listed here because a missing curl breaks the build inside the VM, not on the host.",
 			"command -v curl && curl --version | head -1",
-			"Fedora: dnf install curl | Ubuntu: apt install curl | Arch: pacman -S curl"),
+			map[paths.Distro][]string{
+				paths.DistroDebian: {"curl"},
+				paths.DistroFedora: {"curl"},
+				paths.DistroArch:   {"curl"},
+			}),
 		cmdCheck("ssh-keygen",
 			LayerHostTooling,
 			"Generates the build-only ed25519 keypair under $XDG_CACHE_HOME/ai-playground/seed/id_ed25519. The public key is injected via cloud-init at Packer build time so Packer can SSH in as 'debian'; the matching authorized_keys is wiped by 'userdel -rf debian' as the last act of the build, so the keypair never reaches the produced golden image.",
 			"command -v ssh-keygen && ssh-keygen -V 2>&1 | head -1 || ssh -V 2>&1",
-			"Fedora: dnf install openssh-clients | Ubuntu: apt install openssh-client | Arch: pacman -S openssh"),
+			map[paths.Distro][]string{
+				paths.DistroDebian: {"openssh-client"},
+				paths.DistroFedora: {"openssh-clients"},
+				paths.DistroArch:   {"openssh"},
+			}),
 		{
 			Name:     "an SSH public key is available at ~/.ssh/id_ed25519.pub or ~/.ssh/id_rsa.pub",
 			Layer:    LayerHostTooling,
@@ -259,13 +299,11 @@ func PrintProblems(w io.Writer, problems []Problem) {
 		ui.Bold(fmt.Sprintf("doctor: %d issue(s) need to be fixed before continuing:", len(problems))))
 	for _, p := range problems {
 		fmt.Fprintf(w, "  %s %s\n", ui.Red("-"), p.Summary)
-		for _, line := range strings.Split(strings.TrimRight(p.Hint, "\n"), "\n") {
-			if line == "" {
-				continue
-			}
+		for _, line := range fixLines(&p) {
 			fmt.Fprintf(w, "      %s\n", ui.Dim(line))
 		}
 	}
+	Summarize(w, problems)
 	fmt.Fprintf(w, "\n%s\n", ui.Dim("Run 'ai-playground doctor' for the full diagnostic with stack-layer context."))
 }
 
@@ -301,13 +339,13 @@ func PrintVerbose(w io.Writer, results []Result) {
 		if r.Check.Inspect != "" {
 			fmt.Fprintf(w, "      %s %s\n", ui.Dim("Inspect: "), ui.Dim(r.Check.Inspect))
 		}
-		if r.Problem != nil && r.Problem.Hint != "" {
-			fmt.Fprintf(w, "      %s\n", ui.Yellow("Fix:"))
-			for _, line := range strings.Split(strings.TrimRight(r.Problem.Hint, "\n"), "\n") {
-				if line == "" {
-					continue
+		if r.Problem != nil {
+			lines := fixLines(r.Problem)
+			if len(lines) > 0 {
+				fmt.Fprintf(w, "      %s\n", ui.Yellow("Fix:"))
+				for _, line := range lines {
+					fmt.Fprintf(w, "        %s\n", line)
 				}
-				fmt.Fprintf(w, "        %s\n", line)
 			}
 		}
 	}
@@ -315,9 +353,172 @@ func PrintVerbose(w io.Writer, results []Result) {
 	fmt.Fprintln(w)
 	if failures == 0 {
 		fmt.Fprintf(w, "%s All %d checks passed.\n", ui.Green("✓"), len(results))
-	} else {
-		fmt.Fprintf(w, "%s %d of %d check(s) failed.\n", ui.Red("✗"), failures, len(results))
+		return
 	}
+	fmt.Fprintf(w, "%s %d of %d check(s) failed.\n", ui.Red("✗"), failures, len(results))
+
+	probs := make([]Problem, 0, failures)
+	for _, r := range results {
+		if r.Problem != nil {
+			probs = append(probs, *r.Problem)
+		}
+	}
+	Summarize(w, probs)
+}
+
+// distroOrder controls the order distros appear in per-check Fix lines and
+// in the labelled fallback summary when DetectDistro returned Unknown.
+var distroOrder = []paths.Distro{paths.DistroDebian, paths.DistroFedora, paths.DistroArch}
+
+// distroLabel is the human label used in per-check Fix lines (e.g.
+// "Debian/Ubuntu: apt install …"). Avoid the precise-register
+// "DistroDebian" enum spelling — this is the user-facing surface.
+func distroLabel(d paths.Distro) string {
+	switch d {
+	case paths.DistroDebian:
+		return "Debian/Ubuntu"
+	case paths.DistroFedora:
+		return "Fedora/RHEL"
+	case paths.DistroArch:
+		return "Arch"
+	}
+	return d.String()
+}
+
+// installCmd renders "<pkg-mgr> install <pkgs>" for the given distro family.
+// The leading "sudo " is added by callers that need it; the per-check Fix
+// line shows three side-by-side commands without sudo (tighter), while the
+// consolidated Quick fix block prepends sudo (a copy-pasteable command).
+func installCmd(d paths.Distro, pkgs []string) string {
+	if len(pkgs) == 0 {
+		return ""
+	}
+	switch d {
+	case paths.DistroDebian:
+		return "apt install " + strings.Join(pkgs, " ")
+	case paths.DistroFedora:
+		return "dnf install " + strings.Join(pkgs, " ")
+	case paths.DistroArch:
+		return "pacman -S " + strings.Join(pkgs, " ")
+	}
+	return ""
+}
+
+// formatPerCheckPackages renders "Debian/Ubuntu: apt install … | Fedora: …"
+// for the per-check Fix block.
+func formatPerCheckPackages(pkgs map[paths.Distro][]string) string {
+	var parts []string
+	for _, d := range distroOrder {
+		if list, ok := pkgs[d]; ok && len(list) > 0 {
+			parts = append(parts, fmt.Sprintf("%s: %s", distroLabel(d), installCmd(d, list)))
+		}
+	}
+	return strings.Join(parts, " | ")
+}
+
+// fixLines flattens a Problem's structured fix data + free-form Hint into
+// a sequence of lines ready to be indented under "Fix:". Blank lines from
+// Hint are dropped.
+func fixLines(p *Problem) []string {
+	var lines []string
+	if pkgLine := formatPerCheckPackages(p.Packages); pkgLine != "" {
+		lines = append(lines, pkgLine)
+	}
+	lines = append(lines, p.Commands...)
+	for _, line := range strings.Split(strings.TrimRight(p.Hint, "\n"), "\n") {
+		if line == "" {
+			continue
+		}
+		lines = append(lines, line)
+	}
+	return lines
+}
+
+// Summarize writes a consolidated "Quick fix" block aggregated across all
+// problems and tailored to the detected Linux distribution. When the host
+// distro is unknown it falls back to a per-distro labelled list so the user
+// can pick the right column themselves.
+//
+// The block is intentionally action-first: a single install command with
+// every missing package deduplicated, then any follow-up shell commands in
+// the order their checks fired (which matches the dependency order — install
+// before usermod, usermod before service start, etc.).
+func Summarize(w io.Writer, problems []Problem) {
+	if len(problems) == 0 {
+		return
+	}
+
+	pkgsByDistro := map[paths.Distro][]string{}
+	seenPkg := map[paths.Distro]map[string]bool{}
+	for _, d := range distroOrder {
+		seenPkg[d] = map[string]bool{}
+	}
+	var cmds []string
+	seenCmd := map[string]bool{}
+	var notes []string
+	seenNote := map[string]bool{}
+
+	for _, p := range problems {
+		for _, d := range distroOrder {
+			for _, pk := range p.Packages[d] {
+				if seenPkg[d][pk] {
+					continue
+				}
+				seenPkg[d][pk] = true
+				pkgsByDistro[d] = append(pkgsByDistro[d], pk)
+			}
+		}
+		for _, c := range p.Commands {
+			if seenCmd[c] {
+				continue
+			}
+			seenCmd[c] = true
+			cmds = append(cmds, c)
+		}
+		for _, line := range strings.Split(strings.TrimRight(p.Hint, "\n"), "\n") {
+			line = strings.TrimSpace(line)
+			if line == "" || seenNote[line] {
+				continue
+			}
+			seenNote[line] = true
+			notes = append(notes, line)
+		}
+	}
+
+	d, raw, _ := paths.DetectDistro()
+	fmt.Fprintln(w)
+	fmt.Fprintf(w, "%s %s\n", ui.Yellow("→"), ui.Bold("Quick fix"))
+
+	if d == paths.DistroUnknown {
+		label := raw
+		if label == "" {
+			label = "unknown"
+		}
+		fmt.Fprintf(w, "  %s\n", ui.Dim(fmt.Sprintf("(distro %q is not auto-supported — pick the column for your package manager)", label)))
+		distros := make([]paths.Distro, 0, len(pkgsByDistro))
+		for k := range pkgsByDistro {
+			distros = append(distros, k)
+		}
+		sort.Slice(distros, func(i, j int) bool { return distros[i] < distros[j] })
+		for _, dk := range distros {
+			if cmd := installCmd(dk, pkgsByDistro[dk]); cmd != "" {
+				fmt.Fprintf(w, "    %s  %s\n", ui.Bold(distroLabel(dk)+":"), "sudo "+cmd)
+			}
+		}
+	} else {
+		fmt.Fprintf(w, "  %s\n", ui.Dim(fmt.Sprintf("(detected %s family — %s)", d, raw)))
+		if cmd := installCmd(d, pkgsByDistro[d]); cmd != "" {
+			fmt.Fprintf(w, "    %s\n", "sudo "+cmd)
+		}
+	}
+
+	for _, c := range cmds {
+		fmt.Fprintf(w, "    %s\n", c)
+	}
+	for _, n := range notes {
+		fmt.Fprintf(w, "    %s\n", ui.Dim(n))
+	}
+	fmt.Fprintf(w, "\n  %s\n", ui.Dim("Then re-run 'ai-playground doctor' to verify."))
 }
 
 // wrapDim re-wraps a long string at ~88 columns, indenting continuation
@@ -352,7 +553,9 @@ func wrapDim(text, contIndent string) string {
 }
 
 // cmdCheck builds a "<name> is on PATH" check at the given stack layer.
-func cmdCheck(name, layer, verifies, inspect, hint string) Check {
+// Pkgs is the per-distro install package list — used both for the per-check
+// Fix line and aggregated into the consolidated "Quick fix" summary.
+func cmdCheck(name, layer, verifies, inspect string, pkgs map[paths.Distro][]string) Check {
 	return Check{
 		Name:     name + " is on PATH",
 		Layer:    layer,
@@ -360,7 +563,10 @@ func cmdCheck(name, layer, verifies, inspect, hint string) Check {
 		Inspect:  inspect,
 		Run: func(ctx context.Context) *Problem {
 			if _, err := exec.LookPath(name); err != nil {
-				return &Problem{Summary: name + " is not on PATH", Hint: hint}
+				return &Problem{
+					Summary:  name + " is not on PATH",
+					Packages: pkgs,
+				}
 			}
 			return nil
 		},
@@ -380,9 +586,9 @@ func checkKVMAccess(ctx context.Context) *Problem {
 	f, err := os.OpenFile("/dev/kvm", os.O_RDWR, 0)
 	if err != nil {
 		return &Problem{
-			Summary: "/dev/kvm exists but the current user can't open it O_RDWR",
-			Hint: "sudo usermod -aG kvm $USER\n" +
-				"# then log out and back in for the new gid to take effect on /dev/kvm (mode 0660 group=kvm)",
+			Summary:  "/dev/kvm exists but the current user can't open it O_RDWR",
+			Commands: []string{"sudo usermod -aG kvm $USER"},
+			Hint:     "# then log out and back in for the new gid to take effect on /dev/kvm (mode 0660 group=kvm)",
 		}
 	}
 	_ = f.Close()
@@ -396,9 +602,17 @@ func checkLibvirtGroup(ctx context.Context) *Problem {
 	}
 	g, err := user.LookupGroup("libvirt")
 	if err != nil {
+		// The libvirt group is created by the libvirt-daemon-system /
+		// libvirt-daemon / libvirt package. Ship the install set here so the
+		// user gets a single command rather than a "see virsh hint above".
 		return &Problem{
 			Summary: "POSIX group 'libvirt' does not exist on this system",
-			Hint:    "Install libvirt (see virsh hint above), then re-run.",
+			Packages: map[paths.Distro][]string{
+				paths.DistroDebian: {"libvirt-daemon-system"},
+				paths.DistroFedora: {"libvirt-daemon"},
+				paths.DistroArch:   {"libvirt"},
+			},
+			Hint: "After install, re-run 'ai-playground doctor' to pick up the new group.",
 		}
 	}
 	gids, err := u.GroupIds()
@@ -411,9 +625,9 @@ func checkLibvirtGroup(ctx context.Context) *Problem {
 		}
 	}
 	return &Problem{
-		Summary: "current user is not a member of POSIX group 'libvirt'",
-		Hint: "sudo usermod -aG libvirt $USER\n" +
-			"# then log out and back in",
+		Summary:  "current user is not a member of POSIX group 'libvirt'",
+		Commands: []string{"sudo usermod -aG libvirt $USER"},
+		Hint:     "# then log out and back in",
 	}
 }
 
@@ -439,9 +653,9 @@ func checkLibvirtd(ctx context.Context) *Problem {
 	defer cancel()
 	if err := exec.CommandContext(cctx, "virsh", "-c", "qemu:///system", "list").Run(); err != nil {
 		return &Problem{
-			Summary: "libvirtd is not reachable on the qemu:///system socket",
-			Hint: "sudo systemctl enable --now libvirtd\n" +
-				"# also confirm /var/run/libvirt/libvirt-sock exists and your user is in group 'libvirt'",
+			Summary:  "libvirtd is not reachable on the qemu:///system socket",
+			Commands: []string{"sudo systemctl enable --now libvirtd"},
+			Hint:     "# also confirm /var/run/libvirt/libvirt-sock exists and your user is in group 'libvirt'",
 		}
 	}
 	return nil
@@ -458,9 +672,11 @@ func checkDefaultNetwork(ctx context.Context) *Problem {
 	if err != nil {
 		return &Problem{
 			Summary: "libvirt 'default' virtual network is not defined",
-			Hint: "sudo virsh net-define /usr/share/libvirt/networks/default.xml\n" +
-				"sudo virsh net-start default\n" +
+			Commands: []string{
+				"sudo virsh net-define /usr/share/libvirt/networks/default.xml",
+				"sudo virsh net-start default",
 				"sudo virsh net-autostart default",
+			},
 		}
 	}
 	active := false
@@ -481,16 +697,16 @@ func checkDefaultNetwork(ctx context.Context) *Problem {
 	if active && autostart {
 		return nil
 	}
-	hint := ""
+	var cmds []string
 	if !active {
-		hint += "sudo virsh net-start default\n"
+		cmds = append(cmds, "sudo virsh net-start default")
 	}
 	if !autostart {
-		hint += "sudo virsh net-autostart default\n"
+		cmds = append(cmds, "sudo virsh net-autostart default")
 	}
 	return &Problem{
-		Summary: "libvirt 'default' network is defined but not Active=yes and Autostart=yes",
-		Hint:    hint,
+		Summary:  "libvirt 'default' network is defined but not Active=yes and Autostart=yes",
+		Commands: cmds,
 	}
 }
 
@@ -498,9 +714,15 @@ func checkPoolPerms(ctx context.Context) *Problem {
 	const path = "/var/lib/libvirt/images"
 	info, err := os.Stat(path)
 	if err != nil {
+		// Bundle mkdir + chgrp + chmod so the user fixes this in one shot
+		// rather than re-running doctor between each step.
 		return &Problem{
 			Summary: "default storage pool path " + path + " does not exist",
-			Hint:    "sudo mkdir -p " + path,
+			Commands: []string{
+				"sudo mkdir -p " + path,
+				"sudo chgrp libvirt " + path,
+				"sudo chmod g+rwxs " + path,
+			},
 		}
 	}
 	st, ok := info.Sys().(*syscall.Stat_t)
@@ -511,19 +733,22 @@ func checkPoolPerms(ctx context.Context) *Problem {
 	if err != nil {
 		return nil // libvirt-group check covers this
 	}
-	hint := fmt.Sprintf("sudo chgrp libvirt %s\nsudo chmod g+rwxs  %s", path, path)
+	cmds := []string{
+		"sudo chgrp libvirt " + path,
+		"sudo chmod g+rwxs " + path,
+	}
 	if fmt.Sprint(st.Gid) != g.Gid {
 		return &Problem{
-			Summary: path + " is not group-owned by 'libvirt'",
-			Hint:    hint,
+			Summary:  path + " is not group-owned by 'libvirt'",
+			Commands: cmds,
 		}
 	}
 	mode := info.Mode()
 	wantBits := os.ModeSetgid | 0o070
 	if mode&wantBits != wantBits {
 		return &Problem{
-			Summary: path + " does not have mode g+rwxs (group rwx + setgid)",
-			Hint:    hint,
+			Summary:  path + " does not have mode g+rwxs (group rwx + setgid)",
+			Commands: cmds,
 		}
 	}
 	return nil
@@ -540,7 +765,7 @@ func checkSSHKey(ctx context.Context) *Problem {
 		}
 	}
 	return &Problem{
-		Summary: "no SSH public key at ~/.ssh/id_ed25519.pub or ~/.ssh/id_rsa.pub",
-		Hint:    "ssh-keygen -t ed25519",
+		Summary:  "no SSH public key at ~/.ssh/id_ed25519.pub or ~/.ssh/id_rsa.pub",
+		Commands: []string{"ssh-keygen -t ed25519"},
 	}
 }
