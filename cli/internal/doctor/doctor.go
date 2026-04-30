@@ -96,14 +96,16 @@ const stackPreamble = `ai-playground builds and runs Debian VMs through this sta
   Layer 5  Packer (HashiCorp). Drives qemu-system-x86_64 directly (not
            through libvirt) to boot the upstream Debian cloud image, run
            provision scripts over SSH, sysprep, and capture the final
-           qcow2 as the golden image. Note: a similarly-named 'packer'
-           binary ships with cracklib on Fedora/CentOS — a different
-           tool. The doctor distinguishes them via 'packer version'.
+           qcow2 as the golden image. Vendored: ai-playground downloads
+           a SHA256-pinned release into $XDG_DATA_HOME/ai-playground/bin/
+           on first build, so the host's PATH packer (which on Fedora/
+           CentOS may shadow with cracklib's 'packer' tool) is ignored.
 
-  Layer 6  ai-playground host tooling. xorriso (NoCloud seed ISO),
-           ssh-keygen (build-only ed25519 keypair), git (cloning the
-           public repo into the cache), curl (used by some provision
-           scripts).
+  Layer 6  ai-playground host tooling. ssh-keygen (build-only ed25519
+           keypair), git (cloning the public repo into the cache),
+           curl (used by some provision scripts). The per-worker
+           NoCloud seed ISO is built in-process via go-diskfs, so no
+           external ISO tool is required.
 `
 
 // All returns the full set of checks in stack order.
@@ -185,19 +187,8 @@ func All() []Check {
 			"command -v virt-install && virt-install --version",
 			"Fedora: dnf install virt-install | Ubuntu: apt install virtinst | Arch: pacman -S virt-install"),
 
-		// Layer 5 — Packer
-		cmdCheck("packer",
-			LayerPacker,
-			"HashiCorp Packer. The 'build' subcommand drives qemu-system-x86_64 directly (not through libvirt) to boot the upstream Debian cloud image, SSH in with the build-only ed25519 keypair, run packer/provision/*.sh in numeric order, sysprep, and write the final qcow2 to ARTIFACT_DIR.",
-			"command -v packer && packer version",
-			"https://developer.hashicorp.com/packer/install"),
-		{
-			Name:     "'packer' binary is HashiCorp Packer (not cracklib-packer)",
-			Layer:    LayerPacker,
-			Verifies: "Runs 'packer version' and asserts the first output line starts with 'Packer v'. Fedora/CentOS ship a 'packer' binary as part of cracklib (a different tool); if it's first on PATH our 'packer init' invocation will fail with a confusing error.",
-			Inspect:  "command -v packer; packer version 2>&1 | head -1",
-			Run:      checkPackerIsHashicorp,
-		},
+		// Layer 5 — Packer is vendored by 'ai-playground build' on first
+		// run (see internal/vendoring/packer); no host check needed.
 
 		// Layer 6 — host tooling
 		cmdCheck("git",
@@ -210,11 +201,6 @@ func All() []Check {
 			"Used by some provision scripts (e.g. claude-code installer, get-docker.sh) but not by the CLI itself. Listed here because a missing curl breaks the build inside the VM, not on the host.",
 			"command -v curl && curl --version | head -1",
 			"Fedora: dnf install curl | Ubuntu: apt install curl | Arch: pacman -S curl"),
-		cmdCheck("xorriso",
-			LayerHostTooling,
-			"ISO 9660 packer used to build the per-worker NoCloud seed (cidata.iso containing user-data + meta-data). Invoked as 'xorriso -as mkisofs -volid CIDATA -joliet -rock -output OUT user-data meta-data'. cloud-init's NoCloud datasource looks for the CIDATA volume label.",
-			"command -v xorriso && xorriso --version 2>&1 | head -1",
-			"Fedora: dnf install xorriso | Ubuntu: apt install xorriso | Arch: pacman -S libisoburn"),
 		cmdCheck("ssh-keygen",
 			LayerHostTooling,
 			"Generates the build-only ed25519 keypair under $XDG_CACHE_HOME/ai-playground/seed/id_ed25519. The public key is injected via cloud-init at Packer build time so Packer can SSH in as 'debian'; the matching authorized_keys is wiped by 'userdel -rf debian' as the last act of the build, so the keypair never reaches the produced golden image.",
@@ -378,23 +364,6 @@ func cmdCheck(name, layer, verifies, inspect, hint string) Check {
 			}
 			return nil
 		},
-	}
-}
-
-func checkPackerIsHashicorp(ctx context.Context) *Problem {
-	if _, err := exec.LookPath("packer"); err != nil {
-		return nil // already reported by cmdCheck
-	}
-	cctx, cancel := context.WithTimeout(ctx, 5*time.Second)
-	defer cancel()
-	out, err := exec.CommandContext(cctx, "packer", "version").CombinedOutput()
-	if err == nil && strings.HasPrefix(strings.TrimSpace(string(out)), "Packer v") {
-		return nil
-	}
-	return &Problem{
-		Summary: "the 'packer' binary on PATH is not HashiCorp Packer (likely cracklib-packer)",
-		Hint: "Fedora/CentOS: sudo dnf remove cracklib-packer\n" +
-			"Then install HashiCorp Packer: https://developer.hashicorp.com/packer/install",
 	}
 }
 

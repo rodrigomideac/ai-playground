@@ -39,6 +39,7 @@ XDG-compliant. Standard fallbacks apply when `XDG_*_HOME` is unset.
 | `$XDG_CACHE_HOME/ai-playground/seed/` | Build-only ed25519 keypair (`id_ed25519` + `.pub`), `user-data.tpl`, rendered `user-data`, `meta-data`. |
 | `$XDG_CACHE_HOME/ai-playground/packer/` | Packer working dir / artifact output. |
 | `$XDG_DATA_HOME/ai-playground/golden/ai-playground-base.qcow2` | The built golden image. The worker manager reads from here. |
+| `$XDG_DATA_HOME/ai-playground/bin/packer-<version>` | Pinned Packer binary downloaded by `build` on first run (see `internal/vendoring/packer`). |
 
 `paths.go` (in `cli/internal/paths`) is the single source of truth for
 these locations. Don't hard-code XDG paths anywhere else.
@@ -114,11 +115,11 @@ for the precision-first register the doctor follows.
 Full set:
 
 - **Required commands present:** `git`, `curl`, `qemu-system-x86_64`,
-  `qemu-img`, `xorriso`, `ssh-keygen`, `packer`, `virsh`,
-  `virt-install`. Each missing entry prints the per-distro install
-  hint.
-- **`packer` is HashiCorp Packer**, not Fedora's cracklib `packer`.
-  Heuristic: `packer version` first line starts with `Packer v`.
+  `qemu-img`, `ssh-keygen`, `virsh`, `virt-install`. Each missing
+  entry prints the per-distro install hint. (The NoCloud seed ISO is
+  built in-process via `github.com/diskfs/go-diskfs`, and Packer is
+  installed by `build` itself into `$XDG_DATA_HOME/ai-playground/bin/`
+  on first run — neither needs a host check.)
 - **`/dev/kvm` exists and is r/w by current user.** **C** Tested by
   opening for read+write; the file mode + group membership both
   matter, so testing the open is more reliable than parsing mode.
@@ -173,6 +174,27 @@ Each `build` compares `provision.include` against the repo source's
 
 Drift checking is best-effort: if the repo source can't be resolved
 (e.g. offline with no cache), `build` warns and continues.
+
+## Vendored Packer (`internal/vendoring/packer`)
+
+`build` downloads a SHA256-pinned HashiCorp Packer release into
+`$XDG_DATA_HOME/ai-playground/bin/packer-<version>` on first run and
+invokes that binary by absolute path; the host's PATH `packer` is
+ignored. The pin (`Version` const + per-arch `Checksums` map) lives
+in `cli/internal/vendoring/packer/packer.go` and must be bumped in
+lockstep — `Ensure` refuses to install a binary whose SHA256 does
+not match the entry for `runtime.GOOS_runtime.GOARCH`.
+
+Bumping the pin: update `Version`, replace the four entries in
+`Checksums` with the values from `releases.hashicorp.com/packer/<ver>/
+packer_<ver>_SHA256SUMS`, and ship. On the next `build`, the new
+binary is downloaded and any stale `packer-*` files in `bin/` are
+garbage-collected.
+
+Supported arches are whichever keys exist in `Checksums` — currently
+`linux_amd64`, `linux_arm64`, `darwin_amd64`, `darwin_arm64`. A
+runtime arch outside this set produces a clear "not built for X"
+error from `Ensure` instead of failing further down.
 
 ## Packer-template variable contract
 
