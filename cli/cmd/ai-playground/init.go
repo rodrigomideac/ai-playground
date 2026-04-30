@@ -13,13 +13,13 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/rodrigomideac/ai-playground/internal/buildflow"
-	"github.com/rodrigomideac/ai-playground/internal/config"
-	"github.com/rodrigomideac/ai-playground/internal/doctor"
-	"github.com/rodrigomideac/ai-playground/internal/paths"
-	"github.com/rodrigomideac/ai-playground/internal/promptio"
-	"github.com/rodrigomideac/ai-playground/internal/repo"
-	"github.com/rodrigomideac/ai-playground/internal/ui"
+	"github.com/rodrigomideac/ai-playground/cli/internal/buildflow"
+	"github.com/rodrigomideac/ai-playground/cli/internal/config"
+	"github.com/rodrigomideac/ai-playground/cli/internal/doctor"
+	"github.com/rodrigomideac/ai-playground/cli/internal/paths"
+	"github.com/rodrigomideac/ai-playground/cli/internal/promptio"
+	"github.com/rodrigomideac/ai-playground/cli/internal/repo"
+	"github.com/rodrigomideac/ai-playground/cli/internal/ui"
 )
 
 var initCmd = &cobra.Command{

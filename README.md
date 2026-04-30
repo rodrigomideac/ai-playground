@@ -2,9 +2,9 @@
 
 Have you wanted reproducible VMs to run agent workloads?
 
-This repo contains a CLI tool that can be used to spin up KVM/libvirt VMs, all preconfigured with tools that you decide.
+This project is a CLI tool that generates a golden image `.qcow2` file, and spins up VMs with that as base disk.
 
-The golden image ships with Docker, oh-my-zsh, neovim, and qemu-guest-agent by default. Add anything else via the [provisioning hooks](docs/CUSTOMIZATION.md#provision-scripts).
+The golden image ships with Docker, oh-my-zsh, neovim, and qemu-guest-agent by default. 
 
 ## Why VMs and not containers
 
@@ -18,6 +18,30 @@ Basically, I wanted a reproducible development environment. Some benefits of usi
 - VM-escape CVEs exist but are narrower than container-escape ones
 
 This is a personal/local-first tool, use it at your own risk!
+
+## Getting started
+
+Install the CLI:
+
+```bash
+go install github.com/rodrigomideac/ai-playground/cli/cmd/ai-playground@latest
+```
+
+Then verify your host has the rest of the dependencies (libvirt, qemu, Packer, ...):
+
+```bash
+ai-playground doctor
+```
+
+Anything missing prints with the literal command to fix it. Once doctor is green, walk through first-time setup and produce the golden image:
+
+```bash
+ai-playground build
+```
+
+It clones the public repo, walks you through which setup scripts to include and the worker-VM username, and runs Packer (~3-5 min on first run). After that, `ai-playground add-worker` spins up a worker.
+
+For the full host-side setup (per-distro install lines, libvirt pool perms), see [docs/INSTALLATION.md](docs/INSTALLATION.md).
 
 ## Documentation
 

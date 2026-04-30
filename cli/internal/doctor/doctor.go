@@ -24,7 +24,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/rodrigomideac/ai-playground/internal/ui"
+	"github.com/rodrigomideac/ai-playground/cli/internal/ui"
 )
 
 // Problem is a single failed check, ready to print as a punch-list entry.

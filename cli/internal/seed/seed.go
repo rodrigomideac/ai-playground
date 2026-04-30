@@ -13,7 +13,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/rodrigomideac/ai-playground/internal/ui"
+	"github.com/rodrigomideac/ai-playground/cli/internal/ui"
 )
 
 // EnsureKeypair creates id_ed25519/id_ed25519.pub under seedDir if absent.

@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/rodrigomideac/ai-playground/internal/ui"
+	"github.com/rodrigomideac/ai-playground/cli/internal/ui"
 )
 
 func main() {

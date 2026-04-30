@@ -5,7 +5,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/rodrigomideac/ai-playground/internal/doctor"
+	"github.com/rodrigomideac/ai-playground/cli/internal/doctor"
 )
 
 var doctorCmd = &cobra.Command{

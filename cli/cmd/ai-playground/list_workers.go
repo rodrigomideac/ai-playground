@@ -9,8 +9,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/rodrigomideac/ai-playground/internal/ui"
-	"github.com/rodrigomideac/ai-playground/internal/worker"
+	"github.com/rodrigomideac/ai-playground/cli/internal/ui"
+	"github.com/rodrigomideac/ai-playground/cli/internal/worker"
 )
 
 var listWorkersCmd = &cobra.Command{

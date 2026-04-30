@@ -1,17 +1,25 @@
 # Development
 
-For working on `ai-playground` itself — running the binary against a
-local checkout instead of the public repo cache, and where to find each
-piece of the codebase.
+For working on `ai-playground` itself — building from source, running the binary against a local checkout instead of the public repo cache, and where to find each piece of the codebase.
 
-## Use a local repo as the source tree
+## Build from source
 
-By default `ai-playground init` and `ai-playground build` clone (or refresh) `https://github.com/rodrigomideac/ai-playground` into `$XDG_CACHE_HOME/ai-playground/repo/` and read the `packer/` and `chroot/` trees from there. To work against a local checkout instead:
+End users install via `go install` (see [INSTALLATION.md](INSTALLATION.md)). To work on the CLI itself, clone and build:
 
 ```bash
 git clone https://github.com/rodrigomideac/ai-playground ~/src/ai-playground
 cd ~/src/ai-playground
-make build-cli
+make build-cli                            # → cli/bin/ai-playground
+sudo install -m 0755 cli/bin/ai-playground /usr/local/bin/   # optional: put on $PATH
+```
+
+`make check` runs `shellcheck` over the in-repo `.sh` files and `go vet ./...` from `cli/`.
+
+## Use a local repo as the source tree
+
+By default `ai-playground init` and `ai-playground build` clone (or refresh) `https://github.com/rodrigomideac/ai-playground` into `$XDG_CACHE_HOME/ai-playground/repo/` and read the `packer/` and `chroot/` trees from there. To iterate on the in-repo `packer/`, `chroot/`, or provision scripts without going through GitHub, point the CLI at your local checkout:
+
+```bash
 AI_PLAYGROUND_REPO=$PWD ./cli/bin/ai-playground init
 AI_PLAYGROUND_REPO=$PWD ./cli/bin/ai-playground build
 ```

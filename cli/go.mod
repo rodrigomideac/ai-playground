@@ -1,4 +1,4 @@
-module github.com/rodrigomideac/ai-playground
+module github.com/rodrigomideac/ai-playground/cli
 
 go 1.25.0
 

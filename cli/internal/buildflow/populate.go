@@ -13,10 +13,10 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/rodrigomideac/ai-playground/internal/config"
-	"github.com/rodrigomideac/ai-playground/internal/paths"
-	"github.com/rodrigomideac/ai-playground/internal/repo"
-	"github.com/rodrigomideac/ai-playground/internal/ui"
+	"github.com/rodrigomideac/ai-playground/cli/internal/config"
+	"github.com/rodrigomideac/ai-playground/cli/internal/paths"
+	"github.com/rodrigomideac/ai-playground/cli/internal/repo"
+	"github.com/rodrigomideac/ai-playground/cli/internal/ui"
 )
 
 // Populate copies the template, runner, chroot/, and the selected provision

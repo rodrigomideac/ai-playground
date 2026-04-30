@@ -5,8 +5,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/rodrigomideac/ai-playground/internal/config"
-	"github.com/rodrigomideac/ai-playground/internal/repo"
+	"github.com/rodrigomideac/ai-playground/cli/internal/config"
+	"github.com/rodrigomideac/ai-playground/cli/internal/repo"
 )
 
 // Drift summarizes how the user's provision.include differs from the set of

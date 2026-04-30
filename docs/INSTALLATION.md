@@ -4,9 +4,19 @@ Getting `ai-playground` working on a fresh host. Once you've finished
 this page, head to [USAGE.md](USAGE.md) to build the golden image and
 spin up your first worker.
 
-## Prerequisites
+## 1. Install the CLI
 
-You need: KVM/QEMU, libvirt, Packer, Go (to build the CLI), xorriso, git, ssh-keygen, and bats (for tests). `ai-playground doctor` will run a full host-environment check after install and name anything missing — see the [`doctor` section in USAGE.md](USAGE.md#diagnostics).
+```bash
+go install github.com/rodrigomideac/ai-playground/cli/cmd/ai-playground@latest
+```
+
+Requires Go 1.25+. The binary lands in `$GOBIN` (defaults to `~/go/bin`); make sure that directory is on your `$PATH`.
+
+If you'd rather build from source — for example to develop the CLI itself — see [DEVELOPMENT.md](DEVELOPMENT.md).
+
+## 2. Install the runtime dependencies
+
+You need: KVM/QEMU, libvirt, Packer, xorriso, git, ssh-keygen, and bats (for tests). `ai-playground doctor` will run a full host-environment check and name anything missing — see the [`doctor` section in USAGE.md](USAGE.md#diagnostics) — but the per-distro one-liners below cover everything in one shot.
 
 <details>
 <summary><b>Manjaro / Arch</b></summary>
@@ -45,7 +55,7 @@ sudo usermod -aG kvm,libvirt "$USER"
 
 </details>
 
-## One-time host fix
+## 3. One-time host fix
 
 So the CLI can write VM disks without sudo:
 
@@ -56,16 +66,7 @@ sudo chmod g+rwxs  /var/lib/libvirt/images
 
 (The setgid bit makes new files inherit the `libvirt` group, which plays nicely with libvirt's `dynamic_ownership`.)
 
-## Build the CLI
-
-```bash
-make build-cli
-sudo install -m 0755 cli/bin/ai-playground /usr/local/bin/   # optional: put on $PATH
-```
-
-That's it — you should now be able to run `ai-playground --help`.
-
-## Verify the host is ready
+## 4. Verify the host is ready
 
 ```bash
 ai-playground doctor

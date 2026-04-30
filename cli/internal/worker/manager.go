@@ -10,7 +10,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/rodrigomideac/ai-playground/internal/ui"
+	"github.com/rodrigomideac/ai-playground/cli/internal/ui"
 )
 
 // Manager creates and looks up workers. Construct one per CLI invocation;

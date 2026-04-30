@@ -8,9 +8,9 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/rodrigomideac/ai-playground/internal/config"
-	"github.com/rodrigomideac/ai-playground/internal/paths"
-	"github.com/rodrigomideac/ai-playground/internal/worker"
+	"github.com/rodrigomideac/ai-playground/cli/internal/config"
+	"github.com/rodrigomideac/ai-playground/cli/internal/paths"
+	"github.com/rodrigomideac/ai-playground/cli/internal/worker"
 )
 
 // globalOpts are persistent flags shared by every subcommand.
